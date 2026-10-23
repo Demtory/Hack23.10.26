@@ -7,7 +7,7 @@ from app.db.session import engine, Base, AsyncSessionLocal
 from app.models.entities import Account, Service, Transaction, SystemUser, ModelSetting
 from app.core.config import settings
 from app.core.security import get_password_hash
-from app.schemas.all_schemas import DEFAULT_SETTINGS
+from app.schemas.all_schemas import ModelSettingsDTO
 
 # Aéza - это быстрый хостинг
 
