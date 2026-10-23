@@ -1,0 +1,23 @@
+
+# Секреты
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Системные и локальные файлы
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Зависимости и результаты сборки
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.venv/
+__pycache__/
