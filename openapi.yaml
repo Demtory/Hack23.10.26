@@ -1,0 +1,458 @@
+openapi: 3.0.3
+info:
+  title: Aéza Churn Risk Analyzer API
+  description: |
+    Аналитическая система выявления клиентов хостинга Aéza с высоким риском оттока.
+    Обеспечивает расчет risk-score, объяснимость (Explainable AI), оценку финансовых потерь бизнеса и живое обновление.
+    
+    Aéza - это быстрый хостинг
+  version: 1.0.0
+servers:
+  - url: /
+    description: Current Environment
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+        - auth
+      summary: Вход по логину и паролю
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Неверные учетные данные
+
+  /api/v1/auth/me:
+    get:
+      tags:
+        - auth
+      summary: Получение текущего пользователя
+      security:
+        - OAuth2PasswordBearer: []
+      responses:
+        '200':
+          description: Данные текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - auth
+      summary: Завершение текущей сессии
+      security:
+        - OAuth2PasswordBearer: []
+      responses:
+        '200':
+          description: Успешный выход
+
+  /api/v1/customers:
+    get:
+      tags:
+        - customers
+      summary: Получение списка клиентов с оценками риска; фильтрация и сортировка рейтинга
+      security:
+        - OAuth2PasswordBearer: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            default: risk_score
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: risk_level
+          in: query
+          schema:
+            type: string
+            enum: [high, medium, low, unrated]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список клиентов с оценками риска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+
+  /api/v1/customers/{id}:
+    get:
+      tags:
+        - customers
+      summary: Получение подробной оценки клиента, его услуг, признаков риска и объяснений
+      security:
+        - OAuth2PasswordBearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Детальный профиль риска клиента
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAssessmentDTO'
+        '404':
+          description: Клиент не найден
+
+  /api/v1/analytics/summary:
+    get:
+      tags:
+        - analytics
+      summary: Получение сводных показателей риска и денежной оценки потенциальных потерь
+      security:
+        - OAuth2PasswordBearer: []
+      responses:
+        '200':
+          description: Сводная аналитика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummaryDTO'
+
+  /api/v1/model/settings:
+    get:
+      tags:
+        - model
+      summary: Получение действующих настроек и коэффициентов модели
+      security:
+        - OAuth2PasswordBearer: []
+      responses:
+        '200':
+          description: Настройки модели
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSettingsDTO'
+    patch:
+      tags:
+        - model
+      summary: Изменение настроек модели с автоматическим пересчётом результатов
+      security:
+        - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelSettingsDTO'
+      responses:
+        '200':
+          description: Обновленные настройки модели
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelSettingsDTO'
+
+  /api/v1/source/snapshot:
+    put:
+      tags:
+        - source
+      summary: Загрузка или полная замена снимка исходных данных с автоматическим пересчётом
+      security:
+        - OAuth2PasswordBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnapshotPayload'
+      responses:
+        '200':
+          description: Результат загрузки снимка
+
+  /metrics:
+    get:
+      tags:
+        - metrics
+      summary: Получение агрегированных метрик в формате Prometheus
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    OAuth2PasswordBearer:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: /api/v1/auth/login
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, user]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      required: [id, username, email, role]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+
+    ModelSettingsDTO:
+      type: object
+      properties:
+        weights:
+          type: object
+          properties:
+            w_no_autoprolong:
+              type: number
+              default: 0.25
+            w_balance_insufficient:
+              type: number
+              default: 0.35
+            w_prolong_wait:
+              type: number
+              default: 0.20
+            w_expiring_soon:
+              type: number
+              default: 0.10
+            w_failed_transactions:
+              type: number
+              default: 0.10
+        thresholds:
+          type: object
+          properties:
+            high:
+              type: number
+              default: 0.65
+            medium:
+              type: number
+              default: 0.35
+        forecast_days:
+          type: integer
+          default: 7
+        loss_estimation_method:
+          type: string
+          default: weighted_mrr
+
+    RiskFactorDTO:
+      type: object
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [high, medium, low]
+        weight_impact:
+          type: number
+
+    ServiceAssessmentDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        status:
+          type: string
+        price:
+          type: integer
+        paymentTerm:
+          type: string
+        autoProlong:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+        hours_until_expiry:
+          type: number
+        is_at_risk:
+          type: boolean
+        risk_factors:
+          type: array
+          items:
+            type: string
+
+    CustomerAssessmentDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        balance:
+          type: integer
+        withdrawBalance:
+          type: integer
+        totalReplenished:
+          type: integer
+        bonusBalance:
+          type: integer
+        bonusState:
+          type: string
+        effective_balance:
+          type: integer
+        risk_score:
+          type: number
+          nullable: true
+        risk_level:
+          type: string
+          enum: [high, medium, low, unrated]
+        loyalty_score:
+          type: number
+          nullable: true
+        is_rated:
+          type: boolean
+        total_services_count:
+          type: integer
+        active_services_count:
+          type: integer
+        at_risk_services_count:
+          type: integer
+        monthly_recurring_revenue:
+          type: integer
+        potential_loss:
+          type: integer
+        raw_services_value:
+          type: integer
+        risk_factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFactorDTO'
+        primary_reason:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceAssessmentDTO'
+
+    CustomerListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerAssessmentDTO'
+        total:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        pages:
+          type: integer
+        total_potential_loss:
+          type: integer
+
+    AnalyticsSummaryDTO:
+      type: object
+      properties:
+        total_customers:
+          type: integer
+        rated_customers:
+          type: integer
+        unrated_customers:
+          type: integer
+        risk_distribution:
+          type: object
+          properties:
+            high:
+              type: integer
+            medium:
+              type: integer
+            low:
+              type: integer
+            unrated:
+              type: integer
+        total_potential_loss:
+          type: integer
+        total_potential_loss_eur:
+          type: number
+        total_mrr:
+          type: integer
+        high_risk_loss:
+          type: integer
+        medium_risk_loss:
+          type: integer
+        top_risk_factors:
+          type: array
+          items:
+            type: object
+        chart:
+          type: array
+          items:
+            type: object
+        updated_at:
+          type: string
+          format: date-time
+
+    SnapshotPayload:
+      type: object
+      required: [accounts, services, transactions]
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+        services:
+          type: array
+          items:
+            type: object
+        transactions:
+          type: array
+          items:
+            type: object

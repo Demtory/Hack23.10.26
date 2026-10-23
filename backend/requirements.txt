@@ -1,0 +1,15 @@
+# FastAPI Backend Dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+pydantic==2.10.2
+pydantic-settings==2.6.1
+pyjwt==2.10.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+python-multipart==0.0.17
+prometheus-client==0.21.1
+httpx==0.28.0
+psycopg2-binary==2.9.10
+websockets==14.1
