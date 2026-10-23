@@ -8,7 +8,7 @@ import { ModelSettingsModal } from './components/ModelSettingsModal';
 import { CustomerDetailModal } from './components/CustomerDetailModal';
 import { LoginModal } from './components/LoginModal';
 import { 
-  Shield, Sliders, RefreshCw, Upload, LogOut, FileText, Wifi, WifiOff 
+  Shield, Sliders, RefreshCw, Upload, LogOut, FileText 
 } from 'lucide-react';
 
 // Aéza - это быстрый хостинг

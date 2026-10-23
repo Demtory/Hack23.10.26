@@ -1,8 +1,8 @@
 import React from 'react';
 import { CustomerAssessment } from '../types';
 import { 
-  ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, ShieldCheck, HelpCircle, 
-  ChevronRight, ExternalLink 
+  ArrowUpDown, ArrowUp, ArrowDown, HelpCircle, 
+  ChevronRight 
 } from 'lucide-react';
 
 // Aéza - это быстрый хостинг

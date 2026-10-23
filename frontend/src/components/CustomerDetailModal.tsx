@@ -1,8 +1,7 @@
 import React from 'react';
 import { CustomerAssessment } from '../types';
 import { 
-  X, AlertTriangle, ShieldAlert, CheckCircle, Clock, Server, 
-  CreditCard, TrendingDown, RefreshCw 
+  ShieldAlert, Server 
 } from 'lucide-react';
 
 // Aéza - это быстрый хостинг

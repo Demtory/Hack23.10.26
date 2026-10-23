@@ -2,7 +2,7 @@ import React from 'react';
 import { AnalyticsSummary } from '../types';
 import { AlertTriangle, Users, TrendingDown, DollarSign, Activity } from 'lucide-react';
 import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid 
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid 
 } from 'recharts';
 
 // Aéza - это быстрый хостинг
