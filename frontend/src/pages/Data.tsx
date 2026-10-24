@@ -6,7 +6,7 @@ import { dateTime, ErrorBox, money, Spinner } from "../components/ui";
 
 export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSnapshotUploaded?: () => void }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [context,setContext]=useState<{asOf:string|null;updatedAt:string|null}|null>(null);
+  const [context,setContext]=useState<{asOf:string|null;updatedAt:string|null;runId?:number}|null>(null);
   const [retry,setRetry]=useState(0);
   const [snapshotText, setSnapshotText] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -75,36 +75,14 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
     setError(null);
     setStatus(null);
     try {
-      const copy: Snapshot = JSON.parse(JSON.stringify(snapshot));
-      let desc = '';
-      const services = copy.services as Array<Record<string, any>>;
-      const accounts = copy.accounts as Array<Record<string, any>>;
-      if (action === 'autoprolong_off') {
-        const s = services.find(x => x.ownerId === 6 || x.id === 6) || services[0];
-        if (s) {
-          s.autoProlong = false;
-          desc = `Отключено автопродление у услуги ${s.name ?? s.id} (клиент ID ${s.ownerId}). Риск пересчитан.`;
-        }
-      } else if (action === 'topup_20') {
-        const a = accounts.find(x => x.id === 6) || accounts[0];
-        if (a) {
-          a.balance = (Number(a.balance) || 0) + 2000;
-          desc = `Баланс клиента ID ${a.id} пополнен на 20,00 €. Нехватка средств устранена, риск снижен.`;
-        }
-      } else if (action === 'suspend_server') {
-        const s = services.find(x => x.ownerId === 6 || x.id === 6) || services[0];
-        if (s) {
-          s.status = 'suspended';
-          desc = `Услуга ${s.name ?? s.id} (клиент ID ${s.ownerId}) переведена в статус suspended (сервер выключен).`;
-        }
-      }
-      const raw = JSON.stringify(copy);
-      const res = await api.replaceSourceText(raw);
-      setSnapshot(copy);
-      setSnapshotText(raw);
-      setSummary(res.summary);
+      const res = await api.sourceEvent(action, Number((context as {runId?:number}|null)?.runId));
+      const saved = await api.sourceView();
+      setSnapshot(JSON.parse(saved.text) as Snapshot);
+      setSnapshotText(saved.text);
+      setContext(saved);
+      setSummary(saved.runId === res.summary.calculation?.runId ? res.summary : null);
       onSnapshotUploaded?.();
-      setStatus(`Событие в реальном времени: ${desc}`);
+      setStatus("Событие применено к клиенту ID 6. Оценки пересчитаны по новым данным.");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Не удалось выполнить симуляцию');
     } finally {
@@ -232,22 +210,22 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
         <section className="card" style={{gridColumn: '1 / -1'}}>
           <div className="card__heading">
             <div>
-              <p className="card__label">ДЕМОНСТРАЦИЯ ЖЮРИ · РЕАЛЬНОЕ ВРЕМЯ</p>
-              <h2>Сымитировать событие платформы</h2>
+              <p className="card__label">ПРОВЕРКА ОБНОВЛЕНИЙ</p>
+              <h2>Демонстрационные события</h2>
             </div>
           </div>
           <p className="muted">
-            По условиям кейса данные поступают в систему в режиме реального времени. Нажмите кнопку, чтобы эмулировать входящее событие биллинга: изменения сразу отразятся в базе и прилетят по SSE на дашборд.
+            Кнопки изменяют данные клиента ID 6 и запускают пересчёт. Используйте на демонстрационном снимке. Подключение к реальному биллингу эти кнопки не заменяют.
           </p>
           <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginTop:'14px'}}>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('autoprolong_off')}>
-              ⚡ Отключить автопродление (user-0006)
+              Отключить автопродление (клиент ID 6)
             </button>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('topup_20')}>
-              ⚡ Пополнить баланс на +€20 (user-0006)
+              Добавить 20 € на баланс (клиент ID 6)
             </button>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('suspend_server')}>
-              ⚡ Выключить сервер в suspended (user-0006)
+              Отметить услугу выключенной (клиент ID 6)
             </button>
           </div>
         </section>

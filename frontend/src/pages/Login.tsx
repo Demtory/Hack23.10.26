@@ -5,6 +5,7 @@ import { api, ApiError } from "../api";
 import type { User } from "../types";
 
 const SSO_ERRORS: Record<string, string> = {
+  account_conflict: "Этот email уже связан с другой учётной записью. Обратитесь к администратору: автоматическое объединение запрещено.",
   provider_unavailable: "Провайдер входа недоступен. Войдите по паролю или попробуйте позже.",
   state_invalid: "Время входа истекло или ссылка недействительна. Начните вход заново.",
   exchange_failed: "Провайдер отклонил вход. Попробуйте ещё раз.",

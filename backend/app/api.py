@@ -17,9 +17,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse,
 from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredentials
 
 from . import oidc
+from .custom_factors import definitions, metadata
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
-from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, PresetIn, PresetListOut, PresetOut, detail_response
+from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SourceEventIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, PresetIn, PresetListOut, PresetOut, detail_response
 from .forecast import build_forecast, export_rows, range_details
 from .presets import create_preset, delete_preset, list_presets
 from .scoring import FEATURES_META
@@ -87,12 +88,19 @@ def euros(cents: int | float | None) -> float | None:
 
 
 def _ensure_summary(conn: sqlite3.Connection, config: Config) -> dict[str, Any]:
+    def fresh(value):
+        if value is None or 'calculation' not in value or 'thresholds' not in value:
+            return False
+        if config.as_of is not None:
+            return True
+        settings, _, _ = get_settings(conn)
+        return (utcnow() - datetime.fromisoformat(value['updatedAt'].replace('Z', '+00:00'))).total_seconds() < settings['recomputeIntervalSec']
     summary = latest_summary(conn)
-    if summary is not None and "calculation" in summary and "thresholds" in summary:
+    if fresh(summary) and summary is not None and "calculation" in summary and "thresholds" in summary:
         return summary
     with transaction(conn):
         summary = latest_summary(conn)
-        if summary is None or "calculation" not in summary or "thresholds" not in summary:
+        if not fresh(summary):
             settings, version, _ = get_settings(conn)
             _validate_settings(settings)
             summary = recompute(conn, settings, version, config.as_of)
@@ -124,7 +132,8 @@ def _summary_api(summary: dict[str, Any], include_context: bool = True) -> dict[
 def _settings_api(payload: dict[str, Any], version: int, updated_at: str) -> dict[str, Any]:
     return {
         **payload,
-        "features": FEATURES_META,
+        "features": FEATURES_META + metadata(payload),
+        "customFactors": payload.get("customFactors", []),
         "version": version,
         "updatedAt": updated_at,
     }
@@ -239,7 +248,10 @@ def oidc_start(
         discovery, config.oidc_client_id, _oidc_redirect_uri(request, config),
         config.oidc_scopes, state, nonce, challenge,
     )
-    return RedirectResponse(url, status_code=303, headers={"Cache-Control": "no-store"})
+    response = RedirectResponse(url, status_code=303, headers={"Cache-Control": "no-store"})
+    response.set_cookie("oidc_flow", state, max_age=int(OIDC_FLOW_TTL.total_seconds()),
+                        httponly=True, secure=config.cookie_secure, samesite="lax", path=OIDC_CALLBACK_PATH)
+    return response
 
 
 @router.get("/auth/oidc/callback", openapi_extra={"security": []})
@@ -256,10 +268,13 @@ def oidc_callback(
     if not code or not state:
         return _login_redirect("state_invalid")
 
-    flow = conn.execute("SELECT * FROM oidc_flows WHERE state = ?", (state,)).fetchone()
-    if flow is not None:
-        conn.execute("DELETE FROM oidc_flows WHERE state = ?", (state,))
-        conn.commit()
+    binding = request.cookies.get("oidc_flow", "")
+    if not binding or not secrets.compare_digest(binding, state):
+        return _login_redirect("state_invalid")
+    with transaction(conn):
+        flow = conn.execute("SELECT * FROM oidc_flows WHERE state = ?", (state,)).fetchone()
+        if flow is not None:
+            conn.execute("DELETE FROM oidc_flows WHERE state = ?", (state,))
     if flow is None:
         return _login_redirect("state_invalid")
     created = datetime.fromisoformat(flow["created_at"].replace("Z", "+00:00"))
@@ -285,14 +300,18 @@ def oidc_callback(
         return _login_redirect(exc.code)
 
     email = (claims.get("email") or "").strip()
-    if not email or claims.get("email_verified") is False:
+    if not email or claims.get("email_verified") is not True:
         return _login_redirect("email_unverified")
 
-    user_id = ensure_oidc_user(conn, email, claims["sub"])
+    try:
+        user_id = ensure_oidc_user(conn, email, config.oidc_issuer + "|" + claims["sub"])
+    except ValueError:
+        return _login_redirect("account_conflict")
     token = create_session(conn, user_id, config.session_hours)
     response = RedirectResponse(flow["redirect_to"] or "/#/", status_code=303,
                                 headers={"Cache-Control": "no-store"})
     _set_session_cookie(response, token, config)
+    response.delete_cookie("oidc_flow", path=OIDC_CALLBACK_PATH)
     return response
 
 @router.get('/analytics/forecast/export.csv', response_class=Response, responses={
@@ -302,15 +321,19 @@ def oidc_callback(
 })
 def export_forecast(
     kind: str = Query('all', pattern='^(fact|forecast|all)$'),
+    runId: int | None = Query(None, ge=1),
     pastDays: int = Query(30, ge=1, le=90),
     horizonDays: int = Query(30, ge=1, le=90),
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ):
-    summary = _ensure_summary(conn, config)
-    run = latest_run(conn)
+    _ensure_summary(conn, config)
     with read_transaction(conn):
+        run = latest_run(conn)
+        if runId is not None and run['id'] != runId:
+            raise HTTPException(409, detail='Расчёт обновился. Обновите прогноз перед детализацией или экспортом.')
+        summary = json.loads(run["summary"])
         settings, version, _updated = get_settings(conn)
         details = latest_details(conn)
     as_of = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00"))
@@ -519,7 +542,9 @@ _FORECAST_CACHE: dict[tuple[str, int, int, int, int], dict[str, Any]] = {}
 def analytics_forecast_day(
     date: str = Query(..., description="Начало диапазона, YYYY-MM-DD"),
     end: str | None = Query(None, description="Конец диапазона, включительно"),
+    horizonDays: int = Query(30, ge=1, le=90),
     kind: str = Query("forecast", pattern="^(fact|forecast)$"),
+    runId: int | None = Query(None, ge=1),
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
@@ -532,18 +557,23 @@ def analytics_forecast_day(
         raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
     if target_end < target:
         raise HTTPException(status_code=422, detail="end must be after date")
-    summary = _ensure_summary(conn, config)
+    _ensure_summary(conn, config)
+    with read_transaction(conn):
+        run = latest_run(conn)
+        if runId is not None and run['id'] != runId:
+            raise HTTPException(409, detail='Расчёт обновился. Обновите прогноз.')
+        summary = json.loads(run['summary'])
+        settings, _version, _updated = get_settings(conn)
+        details = latest_details(conn)
     as_of_date = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00")).date()
     if kind == "fact" and target_end > as_of_date:
         raise HTTPException(status_code=422, detail="fact date is after the snapshot")
-    if kind == "forecast" and target <= as_of_date:
+    if kind == "forecast" and target < as_of_date:
         raise HTTPException(status_code=422, detail="forecast date is not in the future")
 
-    with read_transaction(conn):
-        settings, _version, _updated = get_settings(conn)
-        details = latest_details(conn)
     data = range_details(details, datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00")),
-                         date, target_end.isoformat(), kind, settings)
+                         date, target_end.isoformat(), kind, settings,
+                         window_end=datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00")) + timedelta(days=horizonDays))
     data["expectedLoss"] = euros(data.pop("expectedLossCents"))
     data["items"] = [
         {
@@ -561,22 +591,27 @@ def analytics_forecast(
     past_days: int = Query(30, ge=1, le=90, alias="pastDays"),
     horizon_days: int = Query(30, ge=1, le=90, alias="horizonDays"),
     bucket_days: int = Query(1, ge=1, le=30, alias="bucketDays"),
+    runId: int | None = Query(None, ge=1),
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     """Факт истечений и прогноз непродлений по срокам оплаты."""
-    summary = _ensure_summary(conn, config)
-    run = latest_run(conn)
+    _ensure_summary(conn, config)
+    with read_transaction(conn):
+        run = latest_run(conn)
+        if runId is not None and run['id'] != runId:
+            raise HTTPException(409, detail='Расчёт обновился. Обновите прогноз перед детализацией или экспортом.')
+        summary = json.loads(run["summary"])
+        settings, _version, _updated = get_settings(conn)
+        details = latest_details(conn)
     cache_key = (str(config.db_path), int(run["id"]) if run else 0, past_days, horizon_days, bucket_days)
     cached = _FORECAST_CACHE.get(cache_key)
     if cached is not None:
         return cached
-    with read_transaction(conn):
-        settings, _version, _updated = get_settings(conn)
-        details = latest_details(conn)
     as_of = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00"))
     data = build_forecast(details, as_of, settings, past_days, horizon_days, bucket_days)
+    data["runId"] = run["id"]
     data["forecast"] = [
         {
             "date": point["date"],
@@ -601,7 +636,7 @@ def analytics_forecast(
 def _validate_settings(payload: dict[str, Any], known: set[str] | None = None) -> None:
     weights = payload.get("weights", {})
     if known is None:
-        known = {feature["code"] for feature in FEATURES_META}
+        known = {feature["code"] for feature in FEATURES_META} | {r["code"] for r in definitions(payload)}
     unknown = set(weights) - known
     if unknown:
         raise ValueError(f"unknown feature weights: {sorted(unknown)}")
@@ -611,7 +646,7 @@ def _validate_settings(payload: dict[str, Any], known: set[str] | None = None) -
     if any(not math.isfinite(float(value)) or float(value) < 0 for value in weights.values()):
         raise ValueError("weights must be >= 0")
     if not any(float(value) > 0 for value in weights.values()):
-        raise ValueError("weights sum must be > 0")
+        raise ValueError("Включите хотя бы один фактор: сумма влияний должна быть больше нуля")
     medium = float(payload["thresholds"]["medium"])
     high = float(payload["thresholds"]["high"])
     if not 0 < medium < high < 100:
@@ -654,6 +689,19 @@ def patch_settings(
                     'message':'Настройки изменены другим пользователем. Черновик сохранён.'})
             merged = copy.deepcopy(current)
             delta = patch.model_dump(by_alias=True, exclude_none=True)
+            if 'customFactors' in delta:
+                if patch.expected_version is None:
+                    raise HTTPException(422, detail='Для изменения собственных факторов нужна expectedVersion')
+                old_codes = {r['code'] for r in definitions(current)}
+                merged['customFactors'] = delta['customFactors']
+                try:
+                    new_codes = {r['code'] for r in definitions(merged)}
+                except ValueError as exc:
+                    raise HTTPException(422, detail=str(exc)) from exc
+                for code in old_codes - new_codes:
+                    merged['weights'].pop(code, None)
+                for code in new_codes - old_codes:
+                    merged['weights'][code] = 0.0
             for key in ("weights", "statusFloors"):
                 if key in delta and delta[key] is not None:
                     merged.setdefault(key, {}).update(delta[key])
@@ -808,6 +856,44 @@ def put_snapshot(
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="Изменение не применено; сохранено прежнее состояние") from None
+
+
+@router.post('/source/events')
+def source_event(body: SourceEventIn, config: Config = Depends(get_config),
+                 conn: sqlite3.Connection = Depends(get_db),
+                 _user: dict[str, Any] = Depends(require_user)):
+    try:
+        with transaction(conn):
+            run = latest_run(conn)
+            if not run or run['id'] != body.expected_run_id:
+                raise HTTPException(409, detail='Данные изменились. Обновите снимок перед повтором события.')
+            snapshot = _source_snapshot(conn)
+            account = next((a for a in snapshot['accounts'] if a['id'] == 6), None)
+            if account is None:
+                raise HTTPException(409, detail='Демонстрация доступна только при наличии клиента ID 6.')
+            if body.action == 'topup_20':
+                account['balance'] += 2000
+            else:
+                service = next((s for s in snapshot['services'] if s['ownerId'] == 6 and s['status'] not in ('deleted','blocked')), None)
+                if service is None:
+                    raise HTTPException(409, detail='У клиента ID 6 нет доступных услуг для этого события.')
+                if body.action == 'autoprolong_off':
+                    service['autoProlong'] = False
+                else:
+                    service['status'] = 'suspended'
+            checked = SnapshotIn.model_validate(snapshot)
+            validate_snapshot(checked)
+            counts = replace_snapshot(conn, checked)
+            settings, version, _ = get_settings(conn)
+            summary = recompute(conn, settings, version, config.as_of)
+            response = JSONResponse({'counts':counts, 'summary':_summary_api(summary)})
+        return response
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(422, detail='Событие отклонено: недопустимые данные. Прежнее состояние сохранено.') from None
+    except Exception:
+        raise HTTPException(500, detail='Событие не применено; прежнее состояние сохранено.') from None
 
 
 # ------------------------------------------------------------------------- metrics

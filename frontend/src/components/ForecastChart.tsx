@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { downloadBlob } from "../download";
 import type { Forecast, ForecastDay } from "../types";
-import { clientsWord, money, plural, servicesWord, shortDate } from "./ui";
+import { clientsWord, money, plural, servicesWord, shortDate, ErrorBox, Spinner } from "./ui";
 
 type Kind = "fact" | "forecast";
 type Selection = { date: string; end: string; kind: Kind };
@@ -39,6 +39,8 @@ function rangeLabel(start: string, end: string) {
 }
 
 export function ForecastChart({ liveTick }: { liveTick: number }) {
+  const [loadError,setLoadError]=useState<string|null>(null);
+  const [retry,setRetry]=useState(0);
   const [data, setData] = useState<Forecast | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [day, setDay] = useState<ForecastDay | null>(null);
@@ -53,15 +55,15 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     api
       .forecast(7)
       .then((value) => {
-        if (active) setData(value);
+        if (active) {setData(value);setLoadError(null);}
       })
       .catch(() => {
-        if (active) setData(null);
+        if (active) setLoadError("Не удалось обновить прогноз. Проверьте соединение и повторите.");
       });
     return () => {
       active = false;
     };
-  }, [liveTick]);
+  }, [liveTick,retry]);
 
   useEffect(() => {
     if (!selected) {
@@ -73,7 +75,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     setDayError(null);
     setDay(null);
     api
-      .forecastDay(selected.date, selected.end, selected.kind)
+      .forecastDay(selected.date, selected.end, selected.kind, data?.runId,data?.horizonDays)
       .then((value) => {
         if (active) setDay(value);
       })
@@ -83,7 +85,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     return () => {
       active = false;
     };
-  }, [selected]);
+  }, [selected,data?.runId]);
 
   useEffect(
     () => () => {
@@ -94,16 +96,16 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
 
   const peak = useMemo(() => {
     if (!data) return 1;
-    return Math.max(
+    return Math.ceil(Math.max(
       1,
       ...data.fact.map((point) => point.services),
-      ...data.forecast.map((point) => point.services),
-    );
+      ...data.forecast.map((point) => point.expectedNonRenewals),
+    ));
   }, [data]);
 
-  if (!data) return null;
+  if (!data) return <section className="card"><h2>Прогноз продлений</h2>{loadError?<ErrorBox message={loadError} onRetry={()=>setRetry(x=>x+1)}/>:<Spinner label="Загружаем прогноз"/>}</section>;
 
-  const height = (value: number) => (value ? `${Math.max(6, (value / peak) * 100)}%` : "0%");
+  const height = (value: number) => (value ? `${(value / peak) * 100}%` : "0%");
   const isActive = (date: string, kind: Kind) => selected?.date === date && selected?.kind === kind;
   const download = async () => {
     setExporting(true);
@@ -112,7 +114,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     exportUrl.current = null;
     setExported(null);
     try {
-      const result = await api.forecastExport("all");
+      const result = await api.forecastExport("all",data.runId);
       const url = downloadBlob(result.blob, result.filename);
       exportUrl.current = url;
       setExported({ url, name: result.filename });
@@ -133,7 +135,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
       <div className="card__heading">
         <div>
           <p className="card__label">ПРОГНОЗ</p>
-          <h2 id="forecast-heading">Когда наступает отток</h2>
+          <h2 id="forecast-heading">Прогноз продлений</h2>
         </div>
         <div className="forecast__actions">
           <span className="card__meta">
@@ -145,6 +147,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
         </div>
       </div>
 
+      {loadError && <ErrorBox message={loadError} onRetry={()=>setRetry(x=>x+1)}/>}
       {exportError ? <p className="form-error">{exportError}</p> : null}
       {exported ? (
         <p className="forecast__exported" role="status">
@@ -159,11 +162,12 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
       <div className="forecast__legend">
         <span className="forecast__key forecast__key--fact">Факт: срок истёк, услуга не продлена</span>
         <span className="forecast__key forecast__key--forecast">Прогноз: ожидаемые непродления</span>
-        <span className="forecast__hint">Высота — число услуг. Нажмите на столбец, чтобы открыть услуги дня</span>
+        <span className="forecast__hint">Высота — число непродлений: слева истёкшие услуги, справа экспертная оценка. Нажмите на столбец, чтобы увидеть список.</span>
       </div>
 
       <div className="forecast__scroll">
         <div className="forecast__plot">
+          <div className="forecast__scale" aria-hidden="true"><span>{Math.ceil(peak)}</span><span>{(peak/2).toLocaleString("ru-RU",{maximumFractionDigits:1})}</span><span>0</span></div>
           <div className="forecast__grid" aria-hidden="true">
             <span style={{ bottom: "100%" }} />
             <span style={{ bottom: "50%" }} />
@@ -204,12 +208,12 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
                   className={`forecast__slot ${isActive(point.date, "forecast") ? "forecast__slot--active" : ""}`}
                   onClick={() => toggle(point.date, point.end, "forecast")}
                   aria-pressed={isActive(point.date, "forecast")}
-                  aria-label={`${rangeLabel(point.date, point.end)}, прогноз: ${servicesWord(point.services)}, ожидаемо ${point.expectedNonRenewals} непродлений на ${money(point.expectedLoss)}`}
+                  aria-label={`${rangeLabel(point.date, point.end)}, прогноз: ${servicesWord(point.services)}, ожидаемо ${point.expectedNonRenewals} непродлений ; оценка потерь ${money(point.expectedLoss)}`}
                   title={`${rangeLabel(point.date, point.end)} — ${servicesWord(point.services)}, ожидаемо ${point.expectedNonRenewals}, ${money(point.expectedLoss)}`}
                 >
-                  <b className="forecast__value">{point.services || ""}</b>
-                  {point.services ? (
-                    <span className="forecast__bar forecast__bar--forecast" style={{ height: height(point.services) }} />
+                  <b className="forecast__value">{point.expectedNonRenewals ? point.expectedNonRenewals.toLocaleString("ru-RU",{maximumFractionDigits:2}) : ""}</b>
+                  {point.expectedNonRenewals ? (
+                    <span className="forecast__bar forecast__bar--forecast" style={{ height: height(point.expectedNonRenewals) }} />
                   ) : (
                     <span className="forecast__zero" />
                   )}
@@ -240,19 +244,19 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
           <small>услуг у {data.totals.factCustomers} {plural(data.totals.factCustomers, "клиента", "клиентов", "клиентов")}</small>
         </div>
         <div>
-          <span>Ожидаемо не продлят</span>
-          <strong>{data.totals.expectedNonRenewals}</strong>
+          <span>Оценка непродлений</span>
+          <strong>{data.totals.expectedNonRenewals.toLocaleString("ru-RU",{maximumFractionDigits:2})}</strong>
           <small>из {servicesWord(data.totals.forecastServices)} впереди</small>
         </div>
         <div>
-          <span>Ожидаемые потери</span>
+          <span>Оценка потерь</span>
           <strong>{money(data.totals.expectedLoss)}</strong>
           <small>за {data.horizonDays} дней</small>
         </div>
         <div>
           <span>Услуг под риском</span>
           <strong>{data.totals.servicesAtRisk}</strong>
-          <small>score выше среднего порога</small>
+          <small>средний или высокий риск</small>
         </div>
       </div>
 
@@ -287,8 +291,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
               <div className="forecast__row forecast__row--head" aria-hidden="true">
                 <span>Услуга и клиент</span>
                 <span className="num">Цена</span>
-                <span>Score</span>
-                <span className="num">{selected.kind === "forecast" ? "Ожидаемые потери" : "Статус"}</span>
+                <span>Риск, 0–100</span>
+                <span className="num">{selected.kind === "forecast" ? "Оценка потерь" : "Статус"}</span>
               </div>
               {day.items.map((item) => (
                 <Link key={item.serviceId} className="forecast__row" to={`/customers/${item.customerId}`}>

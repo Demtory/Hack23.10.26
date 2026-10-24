@@ -132,7 +132,13 @@ export interface FeatureMeta {
   default: number;
 }
 
+export interface CustomFactor {
+  code:string; title:string;
+  field:'daysToExpiry'|'price'|'balance'|'totalReplenished'|'autoProlong'|'status';
+  operator:'lt'|'lte'|'eq'|'gte'|'gt'; value:number|string|boolean; risk:number;
+}
 export interface ModelSettings {
+  customFactors?: CustomFactor[];
   weights: Record<string, number>;
   thresholds: { medium: number; high: number };
   probability: { midpoint: number; steepness: number; floor: number; ceiling: number };
@@ -181,6 +187,7 @@ export interface ForecastFactPoint {
 }
 
 export interface Forecast {
+  runId:number;
   asOf: string;
   pastDays: number;
   horizonDays: number;

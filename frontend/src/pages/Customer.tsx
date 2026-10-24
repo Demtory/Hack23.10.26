@@ -86,7 +86,7 @@ export function Customer({
           </header>
 
           <CalculationContext asOf={customer.asOf} updatedAt={customer.updatedAt}/>
-          <p className="notice">Деньги — эвристическая оценка ближайших платежей разных услуг, не гарантированный убыток и не месячная выручка. При отсутствии оценки нулевые потери не доказывают безопасность.</p>
+          <p className="notice">Денежная оценка показывает возможные потери от ближайших продлений. Это ориентир для выбора клиентов, а не гарантированный убыток или месячная выручка. Если риск не удалось оценить, нулевая сумма не означает, что клиент в безопасности.</p>
           {customer.score === null ? (
             <>
               <EmptyState title="Нет оценки" text={customer.unknownReason ?? "Недостаточно данных"} />
@@ -164,27 +164,21 @@ export function Customer({
                   <div className="card__heading">
                     <div>
                       <p className="card__label">Объяснение</p>
-                      <h2>Что тянет score вверх</h2>
+                      <h2>Из чего складывается риск</h2>
                     </div>
                   </div>
                   <div className="drivers">
-                    {customer.drivers.map((driver) => (
-                      <div className="driver" key={`${driver.code}-${driver.label}`}>
-                        <div className="driver__row">
-                          <span>{driver.label}</span>
-                          <strong>+{driver.contribution.toFixed(2)}</strong>
-                        </div>
-                        <div className="driver__track">
-                          <span
-                            className={`driver__fill driver__fill--${customer.level}`}
-                            style={{
-                              width: `${Math.min(100, (driver.contribution / Math.max(0.01, customer.drivers[0]?.contribution ?? 1)) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {customer.drivers.length === 0 ? <p className="muted">Явных взвешенных причин нет.</p> : null}
+                    <p className="muted">У каждой услуги своя оценка. Баллы факторов ниже относятся к базе этой услуги. Итог клиента — наибольшая оценка услуги с добавкой за несколько услуг под риском.</p>
+                    {customer.services.map(service => <section key={service.id} className="service-drivers">
+                      <h3>{service.name} · {service.score} из 100</h3>
+                      {service.status === 'blocked' && <p className="muted">Услуга заблокирована: в прогноз продлений и будущих потерь не входит.</p>}
+                      {service.drivers.map(driver => <div className="driver" key={driver.code}>
+                        <div className="driver__row"><span>{driver.label}</span><strong>{(driver.contribution*100).toFixed(1)} балла</strong></div>
+                        <div className="driver__track"><span className={`driver__fill driver__fill--${service.level}`} style={{width:`${Math.min(100,driver.contribution*100)}%`}}/></div>
+                      </div>)}
+                      {!service.drivers.length && <p className="muted">Нет факторов с заметным вкладом в базовую оценку.</p>}
+                      <small className="muted">Показаны до четырёх крупнейших вкладов. Минимальная оценка по статусу учитывается отдельно.</small>
+                    </section>)}
                   </div>
                   {(customer.explanationRules?.length ?? 0) > 0 ||
                   customer.services.some((service) => (service.explanationRules?.length ?? 0) > 0) ? (
@@ -257,7 +251,7 @@ export function Customer({
                         <th scope="col" className="num">Период</th>
                         <th scope="col" className="num">Авто</th>
                         <th scope="col" className="num">Истекает</th>
-                        <th scope="col" className="col-center">Score</th>
+                        <th scope="col" className="col-center">Риск, 0–100</th>
                       </tr>
                     </thead>
                     <tbody>

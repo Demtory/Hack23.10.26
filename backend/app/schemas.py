@@ -100,6 +100,12 @@ class SnapshotIn(APIModel):
     transactions: list[TransactionIn]
 
 
+class SourceEventIn(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    action: Literal['autoprolong_off', 'topup_20', 'suspend_server']
+    expected_run_id: int = Field(strict=True, ge=1, alias='expectedRunId')
+
+
 class LoginIn(BaseModel):
     email: str
     password: str
@@ -128,12 +134,16 @@ class MoneyPatch(BaseModel):
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
 
 
+from .custom_factors import CustomFactor
+
+
 class SettingsPatch(BaseModel):
     """Optional null/omitted fields do not change values. All numeric values must be finite.
 
     The merged configuration must satisfy medium < high, floor < ceiling and have
     a positive weight. These cross-field constraints are enforced by the API.
     """
+    custom_factors: list[CustomFactor] | None = Field(default=None, max_length=20)
     expected_version: int | None = Field(default=None, strict=True, ge=1)
     weights: dict[str, FiniteFloat] | None = None
     thresholds: ThresholdsPatch | None = None
@@ -360,6 +370,7 @@ class ForecastTotals(APIModel):
 
 
 class ForecastOut(APIModel):
+    run_id: int
     as_of: str
     past_days: int
     horizon_days: int

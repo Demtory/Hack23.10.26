@@ -20,7 +20,7 @@ from .scoring import parse_iso, probability
 NOTE = (
     "Исторических удалений нет: в данных отсутствует дата удаления услуги. "
     "Столбцы слева — факт по текущему снимку: срок истёк, услуга не продлена. "
-    "Столбцы справа — прогноз: срок истекает, вероятность непродления взята из score."
+    "Столбцы справа — прогноз: срок истекает, оценка непродления рассчитана по баллу риска. Это экспертная модель, а не подтверждённая вероятность. Заблокированные и удалённые услуги исключены. Текущий день разделён по времени среза (UTC)."
 )
 
 
@@ -46,14 +46,14 @@ def build_forecast(
     }
     forecast: dict[str, dict[str, Any]] = {
         _day(as_of + timedelta(days=offset)): {"services": 0, "expected": 0.0, "loss": 0}
-        for offset in range(1, horizon_days + 1)
+        for offset in range(horizon_days + 1)
     }
     services_at_risk = 0
 
     for customer in customers:
         mitigation = float(customer.get("money", {}).get("mitigation") or 0.0)
         for service in customer.get("services") or []:
-            if service.get("status") == "deleted":
+            if service.get("status") in ("deleted", "blocked"):
                 continue
             expires = parse_iso(service["expiresAt"])
             if expires <= as_of:
@@ -141,6 +141,7 @@ def range_details(
     kind: str,
     settings: dict[str, Any],
     limit: int = 200,
+    window_end: datetime | None = None,
 ) -> dict[str, Any]:
     """Услуги диапазона дат: факт (уже истекли) или прогноз (истекают)."""
     from datetime import date as date_type
@@ -155,7 +156,7 @@ def range_details(
     for customer in customers:
         mitigation = float(customer.get("money", {}).get("mitigation") or 0.0)
         for service in customer.get("services") or []:
-            if service.get("status") == "deleted":
+            if service.get("status") in ("deleted", "blocked"):
                 continue
             expires = parse_iso(service["expiresAt"])
             expires_date = expires.astimezone(timezone.utc).date()
@@ -163,7 +164,7 @@ def range_details(
                 continue
             if kind == "fact" and expires > as_of:
                 continue
-            if kind == "forecast" and expires <= as_of:
+            if kind == "forecast" and (expires <= as_of or (window_end is not None and expires > window_end)):
                 continue
 
             customers_with_events.add(customer["id"])
@@ -223,20 +224,20 @@ def export_rows(
 
     as_of_date = as_of.astimezone(timezone.utc).date()
     fact_start = as_of_date - timedelta(days=past_days - 1)
-    forecast_start = as_of_date + timedelta(days=1)
+    forecast_start = as_of_date
     horizon_end = as_of_date + timedelta(days=horizon_days)
     rows: list[dict[str, Any]] = []
 
     for customer in customers:
         mitigation = float(customer.get("money", {}).get("mitigation") or 0.0)
         for service in customer.get("services") or []:
-            if service.get("status") == "deleted":
+            if service.get("status") in ("deleted", "blocked"):
                 continue
             expires = parse_iso(service["expiresAt"])
             expires_date = expires.astimezone(timezone.utc).date()
             chance = None
             loss = None
-            if expires_date <= as_of_date:
+            if expires <= as_of:
                 if kind not in ("fact", "all") or expires_date < fact_start:
                     continue
                 index = (expires_date - fact_start).days
@@ -245,7 +246,7 @@ def export_rows(
                 week_end = min(week_start + timedelta(days=bucket_days - 1), as_of_date)
                 row_kind = "fact"
             else:
-                if kind not in ("forecast", "all") or expires_date > horizon_end:
+                if kind not in ("forecast", "all") or expires > as_of + timedelta(days=horizon_days):
                     continue
                 index = (expires_date - forecast_start).days
                 bucket = index // bucket_days

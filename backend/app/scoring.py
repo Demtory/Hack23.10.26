@@ -6,8 +6,10 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+from .custom_factors import definitions, evaluate
 from .messages import build_customer_messages, money_text
 
+# Aéza - это быстрый хостинг
 DEFAULT_SETTINGS: dict[str, Any] = {
     "weights": {
         "expiry_pressure": 0.40,
@@ -86,7 +88,7 @@ FEATURES_META = [
     },
     {
         "code": "commitment",
-        "title": "Лояльность",
+        "title": "Пополнения относительно стоимости услуг",
         "description": "1 − min(1, пополнения / (3 × сумма цен услуг))",
         "min": 0.0,
         "max": 1.0,
@@ -222,12 +224,15 @@ def _score_service(
 
     weights = settings["weights"]
     available = available_cents(account, settings)
-    expiry, expiry_label = _expiry(service, available, now)
+    autopay = int(account['balance']) + (int(account['bonus_balance']) if account['bonus_state'] == 'unlocked' else 0)
+    expiry, expiry_label = _expiry(service, autopay, now)
+    if service["status"] == "blocked":
+        expiry_label = "Срок оплаченного периода заблокированной услуги; продление недоступно"
     if service["price"] <= 0:
         funds, funds_label = None, "Цена услуги не указана"
     elif available < service["price"]:
         funds = 1.0
-        funds_label = f"Баланса {eur(available)} не хватает на {eur(service['price'])}"
+        funds_label = f"Доступно {eur(available)}, продление стоит {eur(service['price'])}"
     else:
         funds = max(0.0, 0.3 * (1.0 - available / (3.0 * service["price"])))
         funds_label = f"Запас баланса {eur(available)}"
@@ -259,6 +264,9 @@ def _score_service(
         "payment_history": (history, history_label),
         "commitment": (commitment, commitment_label),
     }
+
+    for rule in definitions(settings):
+        values[rule['code']] = (evaluate(rule, service, account, now), rule['title'])
 
     total_weight = sum(float(weight) for weight in weights.values())
     if not math.isfinite(total_weight):
@@ -431,17 +439,17 @@ def compute(
             related = [service["id"] for service, result in scored
                        if result["score"] >= settings["thresholds"]["medium"]]
             customer_rules.append(explanation_rule("customer_bonus", "customer", None,
-                f"Услуг под риском: {at_risk_services}; добавка {bonus:g} баллов до ограничения100",
+                f"Услуг под риском: {at_risk_services}; добавка {bonus:g} баллов до ограничения в 100 баллов",
                 base_score, uncapped, related))
         customer_score = min(100.0, uncapped)
         if uncapped > 100:
             customer_rules.append(explanation_rule("score_cap", "customer", None,
-                "Ограничение итогового score: 100", uncapped, customer_score))
+                "Итоговая оценка ограничена 100 баллами", uncapped, customer_score))
         customer_level = level_for(customer_score, settings["thresholds"])
         counts[customer_level] += 1
         scored_scores.append(customer_score)
 
-        scorable_price = sum(int(service["price"]) for service, _ in scored)
+        scorable_price = sum(int(service["price"]) for service, _ in scored if service["status"] != "blocked")
         coverage = min(1.0, available / scorable_price) if scorable_price else 0.0
         mitigation = settings["money"]["balanceMitigation"] * coverage
         expected_loss = 0
@@ -451,12 +459,14 @@ def compute(
         driver_bag: dict[tuple[str, str], float] = defaultdict(float)
         for service, result in scored:
             probability_value = probability(result["score"], settings)
-            loss = probability_value * int(service["price"]) * (1.0 - mitigation)
+            renewable_price = int(service["price"]) if service["status"] != "blocked" else 0
+            loss = probability_value * renewable_price * (1.0 - mitigation)
             expected_loss += round(loss)
-            covered_loss += round(probability_value * int(service["price"]) * mitigation)
+            covered_loss += round(probability_value * renewable_price * mitigation)
             if result["score"] >= settings["thresholds"]["medium"]:
-                amount_at_risk += int(service["price"])
                 total_services_at_risk += 1
+                if service["status"] != "blocked":
+                    amount_at_risk += int(service["price"])
             services_out.append(_service_detail(service, result, settings))
             for driver in result["drivers"]:
                 driver_bag[(driver["code"], driver["label"])] += driver["contribution"]
@@ -471,10 +481,12 @@ def compute(
 
         total_loss += expected_loss
         total_risk += amount_at_risk
-        total_available += available
+        if scorable_price > 0:
+            total_available += available
         total_price += scorable_price
-        coverage_values.append(coverage)
-        if coverage < 1:
+        if scorable_price > 0:
+            coverage_values.append(coverage)
+        if scorable_price > 0 and coverage < 1:
             underfunded += 1
         customer = {
             "id": account["id"],

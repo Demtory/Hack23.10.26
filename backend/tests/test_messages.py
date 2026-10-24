@@ -109,3 +109,14 @@ def test_low_risk_email_is_calm_not_alarming(client):
     calm = [c for c in calm if c["level"] == "low" and c["emailDraft"]["situation"] == "on_track"]
     for detail in calm:
         assert "не хватает" not in detail["emailDraft"]["body"]
+
+@pytest.mark.parametrize('status',['active','suspended','prolong_wait','blocked'])
+@pytest.mark.parametrize('auto',[False,True])
+def test_email_states_only_known_facts(status, auto):
+    c = customer(availableCents=0,services=[dict(customer()['services'][0], status=status,autoProlong=auto)])
+    draft = build_customer_messages(c)['emailDraft']['body']
+    for promise in ('вернём','данные сохранены','без потерь','можно активировать','поможем восстановить'):
+        assert promise not in draft
+    if status != 'blocked':
+        assert ('Автопродление включено' if auto else 'Автопродление отключено') in draft
+        assert ('Автопродление отключено' if auto else 'Автопродление включено') not in draft

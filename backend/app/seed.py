@@ -181,7 +181,8 @@ def upgrade_settings(conn: sqlite3.Connection, validate) -> tuple[dict[str, Any]
     if set(FEATURE_GENERATIONS) != set(range(1, target + 1)):
         raise ValueError("missing feature schema generation")
     source_keys = set().union(*(FEATURE_GENERATIONS[g] for g in range(1, generation + 1)))
-    target_keys = set().union(*FEATURE_GENERATIONS.values())
+    from .custom_factors import definitions
+    target_keys = set().union(*FEATURE_GENERATIONS.values()) | {r["code"] for r in definitions(payload)}
     keys = set(payload.get("weights", {}))
     if not source_keys <= keys or not keys <= target_keys:
         raise ValueError("missing old or unknown feature weights; settings preserved")
