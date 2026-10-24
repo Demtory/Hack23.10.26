@@ -23,7 +23,7 @@
 | README + модель + архитектура + «как добавить признак» | ✅ | `README.md`, `docs/` |
 | Расширяемость признаков | ✅ | `FEATURES_META`, `backend/app/scoring.py` |
 | Комментарий `Aéza` | ✅ | `backend/app/main.py`, `Dockerfile` |
-| Тесты | ✅ | `backend/tests` + генератор, 250 passed (см. ниже) |
+| Тесты | ✅ | `backend/tests` + генератор, 251 passed (см. ниже) |
 
 ## Ещё не сделано (P1/P2)
 
@@ -144,4 +144,4 @@ PYTHONPATH=backend python scripts/export_openapi.py
   убраны в свёрнутый блок «Детали расчёта».
 - Причина оценки видна уже в рейтинге под email (обрезается до двух строк,
   полный текст — в tooltip) и в мобильных карточках.
-- Проверка: `250 passed`, `npm run build`, Docker healthy.
+- Проверка: `251 passed`, `npm run build`, Docker healthy.

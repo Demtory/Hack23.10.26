@@ -149,6 +149,21 @@ def ensure_seed(conn: sqlite3.Connection, path: Path, enabled: bool = True) -> b
     return True
 
 
+def _with_defaults(payload: dict[str, Any]) -> dict[str, Any]:
+    """Fill keys added after the database was created; keeps old DBs upgradable."""
+    defaults = default_settings()
+    for section in ("weights", "statusFloors"):
+        target = payload.setdefault(section, {})
+        for key, value in defaults[section].items():
+            target.setdefault(key, value)
+    for section in ("thresholds", "probability", "money"):
+        target = payload.setdefault(section, {})
+        for key, value in defaults[section].items():
+            target.setdefault(key, value)
+    payload.setdefault("recomputeIntervalSec", defaults["recomputeIntervalSec"])
+    return payload
+
+
 def get_settings(conn: sqlite3.Connection) -> tuple[dict[str, Any], int, str]:
     row = conn.execute("SELECT payload, version, updated_at FROM settings WHERE id = 1").fetchone()
     if row is None:
@@ -160,7 +175,7 @@ def get_settings(conn: sqlite3.Connection) -> tuple[dict[str, Any], int, str]:
             (json.dumps(payload, ensure_ascii=False), version, _as_iso(updated)),
         )
         return payload, version, _as_iso(updated)
-    return json.loads(row["payload"]), int(row["version"]), row["updated_at"]
+    return _with_defaults(json.loads(row["payload"])), int(row["version"]), row["updated_at"]
 
 
 def save_settings(conn: sqlite3.Connection, payload: dict[str, Any], version: int) -> str:

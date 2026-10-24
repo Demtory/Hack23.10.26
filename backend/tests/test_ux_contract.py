@@ -45,3 +45,18 @@ def test_list_contains_reason(client):
     assert all(item['summary'] for item in items)
     assert next(item for item in items if item['id'] == 6)['summary'].startswith('service-0006:')
     assert next(item for item in items if item['id'] == 3)['summary'] == 'Все услуги удалены'
+
+
+def test_new_feature_defaults_merge_for_existing_db(client, config):
+    import json
+    import sqlite3
+    from .conftest import login
+
+    login(client)
+    with sqlite3.connect(config.db_path) as conn:
+        row = conn.execute("SELECT payload FROM settings WHERE id = 1").fetchone()
+        payload = json.loads(row[0])
+        payload["weights"].pop("commitment")
+        conn.execute("UPDATE settings SET payload = ? WHERE id = 1", (json.dumps(payload),))
+    settings = client.get('/api/v1/model/settings').json()
+    assert "commitment" in settings["weights"]
