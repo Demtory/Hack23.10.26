@@ -54,7 +54,7 @@ dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10
 .forecast__cut b{position:relative;z-index:1;background:#182d48;color:#fff;font-family:Inter,sans-serif;font-size:.5625rem;font-weight:600;letter-spacing:.08em;padding:3px 4px;border-radius:3px;writing-mode:vertical-rl;transform:rotate(180deg);margin-top:-2px}
 .forecast__axis{position:relative;height:18px;margin-top:6px;font-family:Inter,sans-serif;font-size:.625rem;color:var(--muted)}
 .forecast__axis span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
-.forecast__totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0 4px}
+.forecast__totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0 4px}
 .forecast__totals>div{display:grid;gap:2px}
 .forecast__totals span{font-family:Inter,sans-serif;font-size:.6875rem;color:var(--muted)}
 .forecast__totals strong{font-size:1.4rem;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
@@ -74,6 +74,7 @@ dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10
 .forecast__row-main small{color:var(--muted);font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .forecast__row .num{text-align:right;font-variant-numeric:tabular-nums}
 .forecast__note{font-family:Inter,sans-serif;font-size:.625rem;color:var(--muted);margin:12px 0 0;line-height:1.6}
+@media(max-width:900px){.forecast__totals{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){
   .forecast__chart{height:180px}
   .forecast__plot{min-width:520px}

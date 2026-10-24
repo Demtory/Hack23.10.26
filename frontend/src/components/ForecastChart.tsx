@@ -249,6 +249,11 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
           <strong>{money(data.totals.expectedLoss)}</strong>
           <small>за {data.horizonDays} дней</small>
         </div>
+        <div>
+          <span>Услуг под риском</span>
+          <strong>{data.totals.servicesAtRisk}</strong>
+          <small>score выше среднего порога</small>
+        </div>
       </div>
 
       {selected ? (
