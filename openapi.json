@@ -46,6 +46,48 @@
         }
       }
     },
+    "/api/v1/auth/demo": {
+      "get": {
+        "summary": "Demo Login",
+        "description": "Вход по ссылке из QR-кода: без пароля, но только при заданном DEMO_LOGIN_TOKEN.\n\nТокен сравнивается в постоянном времени; пустой DEMO_LOGIN_TOKEN выключает\nэндпоинт целиком (404), неверный токен даёт 401.",
+        "operationId": "demo_login_api_v1_auth_demo_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "summary": "Me",

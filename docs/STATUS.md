@@ -418,3 +418,8 @@ cookie; добавление metadata/default нового признака вы
   поэтому `SSO=1 ./scripts/deploy_remote.sh` после старта выполняет
   `kcadm update realms/master -s sslRequired=NONE`. Проверено: вход `admin` и дашборд
   консоли на `http://193.233.246.179:8081/admin/`.
+- Добавлен вход по QR без пароля: `GET /api/v1/auth/demo?token=…` (303 + сессия),
+  включается только переменной `DEMO_LOGIN_TOKEN` (пусто — 404, неверный токен — 401).
+  QR лежит в `pitch/qr-demo.png` и `docs/screenshots/15-qr-demo.png`, перевыпуск —
+  `scripts/demo_qr.py`. На деку добавлен восьмой слайд «Панель в один скан».
+  Покрытие: 4 теста `test_demo_login.py`; проверено сканирование QR декодером.

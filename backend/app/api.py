@@ -169,6 +169,38 @@ def login(
     return {"id": user_id, "email": body.email, "token": token, "accessToken": token}
 
 
+@router.get("/auth/demo", openapi_extra={"security": [{}]})
+def demo_login(
+    token: str = "",
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> RedirectResponse:
+    """Вход по ссылке из QR-кода: без пароля, но только при заданном DEMO_LOGIN_TOKEN.
+
+    Токен сравнивается в постоянном времени; пустой DEMO_LOGIN_TOKEN выключает
+    эндпоинт целиком (404), неверный токен даёт 401.
+    """
+    if not config.demo_login_enabled:
+        raise HTTPException(status_code=404, detail="demo login disabled")
+    if not secrets.compare_digest(token, config.demo_login_token):
+        raise HTTPException(status_code=401, detail="invalid demo token")
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (config.admin_email,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=503, detail="demo user is not provisioned")
+    session = create_session(conn, int(row["id"]), config.session_hours)
+    response = RedirectResponse("/#/overview", status_code=303)
+    response.set_cookie(
+        SESSION_COOKIE,
+        session,
+        max_age=config.session_hours * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=config.cookie_secure,
+        path="/",
+    )
+    return response
+
+
 @router.get("/auth/me")
 def me(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     return user

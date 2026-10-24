@@ -33,13 +33,18 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
-import qrcode
+try:
+    import qrcode
+except ImportError:  # QR-файлы уже лежат в pitch/, генерация не нужна
+    qrcode = None
 
 ROOT = Path(__file__).resolve().parents[1]
 SHOTS = ROOT / "docs" / "screenshots"
 PITCH_DIR = Path(__file__).resolve().parent
 OUT = PITCH_DIR / "risk-desk-pitch.pptx"
+TOTAL_SLIDES = 8
 QR_PATH = PITCH_DIR / "qr-repo.png"
+DEMO_QR_PATH = PITCH_DIR / "qr-demo.png"
 LOGO_PATH = PITCH_DIR / "aeza-logo.png"
 MARK_PATH = PITCH_DIR / "aeza-mark.png"
 DASH_CROP_PATH = PITCH_DIR / "dashboard-crop.png"
@@ -65,7 +70,7 @@ MARGIN = 0.85
 
 def ensure_assets() -> None:
     # 1. Прямой QR-код без редиректов
-    if not QR_PATH.exists():
+    if not QR_PATH.exists() and qrcode is not None:
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -200,7 +205,7 @@ def new_slide(prs, *, background=WHITE, footer=True, number=None):
             image(slide, MARK_PATH, MARGIN, 7.06, 0.22, border=False)
         text(slide, MARGIN + 0.32, 7.08, 6, 0.3, "AÉZA · ОТТОК · Risk Desk", 10, bold=True, color=PANTONE_NAVY, font=HEAD)
         if number is not None:
-            text(slide, W - MARGIN - 0.8, 7.08, 0.8, 0.3, f"{number:02d} / 07", 10, bold=True, color=PANTONE_NAVY,
+            text(slide, W - MARGIN - 0.8, 7.08, 0.8, 0.3, f"{number:02d} / {TOTAL_SLIDES:02d}", 10, bold=True, color=PANTONE_NAVY,
                  align=PP_ALIGN.RIGHT, font=HEAD)
     return slide
 
@@ -469,6 +474,37 @@ def build(output_path: Path = OUT) -> Path:
     note(slide,
          "[2:35–2:50 | 18 слов]\n\n"
          "«Инструкция по запуску — в файле JURY.md. Спасибо за внимание, мы готовы ответить на вопросы и показать работу системы».")
+
+    # --- Слайд 8: панель в один скан
+    slide = new_slide(prs, number=8, background=PANTONE_GRAY)
+    eyebrow(slide, "Демо-стенд")
+    title(slide, "ПАНЕЛЬ В ОДИН СКАН")
+
+    rect(slide, MARGIN, 2.25, 5.2, 4.4, WHITE, line=PANTONE_NAVY, radius=True)
+    if DEMO_QR_PATH.exists():
+        image(slide, DEMO_QR_PATH, MARGIN + 0.55, 2.5, 3.35, border=False)
+    else:
+        text(slide, MARGIN + 0.5, 3.6, 4.2, 0.6, "QR не сгенерирован", 14, bold=True, font=HEAD)
+    text(slide, MARGIN + 0.4, 5.95, 4.4, 0.6,
+         "Наведите камеру — панель откроется\nсразу, без пароля", 12, color=PANTONE_NAVY, font=BODY)
+
+    rect(slide, 6.7, 2.25, 5.7, 4.4, PANTONE_NAVY, radius=True)
+    text(slide, 7.0, 2.5, 5.1, 0.4, "ЧТО ПРОВЕРИТЬ ЗА 60 СЕКУНД", 14, bold=True, color=PANTONE_298C, font=HEAD)
+    bullets(slide, 7.0, 2.95, 5.1, 3.4, [
+        (0, "Сводка:", "16,87 € потерь, 43,91 € под риском, 3 из 10 — высокий."),
+        (0, "Прогноз:", "6 истёкших услуг, 1,7 ожидаемых непродлений, 6,88 €."),
+        (0, "Клиент 6:", "причины, деньги, готовое письмо маркетолога."),
+        (0, "Настройки:", "пресет «Деньги важнее» → 89 → 95 без перезагрузки."),
+        (0, "SSO:", "кнопка Keycloak, marketer@example.test."),
+    ], size=12.5, gap=9, color=WHITE)
+
+    text(slide, 7.0, 5.95, 5.1, 0.5,
+         "Без QR: 193.233.246.179:8000 · admin@example.test / admin123", 10, color=WHITE, font=BODY)
+
+    note(slide,
+         "[2:50–3:00 | 15 слов]\n\n"
+         "«Вот QR: сканируете — панель открывается сразу, без пароля и Docker. "
+         "Это тот же код, что в репозитории, просто уже развёрнутый».")
 
     prs.save(output_path)
     return output_path

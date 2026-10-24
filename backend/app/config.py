@@ -40,10 +40,16 @@ class Config:
     oidc_scopes: str = "openid email profile"
     oidc_internal_base: str = ""
     oidc_provider_name: str = "SSO"
+    # Демо-вход по QR: пустое значение полностью выключает эндпоинт.
+    demo_login_token: str = ""
 
     @property
     def oidc_enabled(self) -> bool:
         return bool(self.oidc_issuer.strip() and self.oidc_client_id.strip())
+
+    @property
+    def demo_login_enabled(self) -> bool:
+        return bool(self.demo_login_token.strip())
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -74,4 +80,5 @@ class Config:
             oidc_scopes=os.getenv("OIDC_SCOPES", "openid email profile").strip() or "openid email profile",
             oidc_internal_base=os.getenv("OIDC_INTERNAL_BASE", "").strip(),
             oidc_provider_name=os.getenv("OIDC_PROVIDER_NAME", "SSO").strip() or "SSO",
+            demo_login_token=os.getenv("DEMO_LOGIN_TOKEN", "").strip(),
         )

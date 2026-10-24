@@ -19,6 +19,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       SESSION_HOURS: ${SESSION_HOURS:-12}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_LOGIN_TOKEN: ${DEMO_LOGIN_TOKEN:-}
     volumes:
       - app-data:/data
     healthcheck:
