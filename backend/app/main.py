@@ -13,7 +13,7 @@ from .api import _ensure_summary, _metrics_text, _validate_settings, router
 from .config import ROOT, Config
 from .db import connect, init_db, transaction
 from .security import ensure_admin
-from .seed import ensure_seed, get_settings
+from .seed import ensure_seed, ensure_source_meta, get_settings
 from .store import recompute
 
 
@@ -28,6 +28,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             ensure_admin(conn, cfg.admin_email, cfg.admin_password)
             with transaction(conn):
                 get_settings(conn)
+                ensure_source_meta(conn)
                 ensure_seed(conn, cfg.seed_path, cfg.seed_on_start)
                 settings, version, _ = get_settings(conn)
                 _validate_settings(settings)

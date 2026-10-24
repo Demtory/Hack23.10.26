@@ -18,7 +18,7 @@ def login(client):
 def database_state(path):
     with sqlite3.connect(path) as conn:
         return {table: conn.execute(f'SELECT * FROM {table} ORDER BY rowid').fetchall()
-                for table in ('accounts', 'services', 'transactions', 'settings', 'score_runs', 'customer_scores', 'sqlite_sequence')}
+                for table in ('accounts', 'services', 'transactions', 'settings', 'source_meta', 'score_runs', 'customer_scores', 'sqlite_sequence')}
 
 
 @pytest.fixture()

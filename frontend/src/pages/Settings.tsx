@@ -46,6 +46,11 @@ export function Settings({ liveTick }: { liveTick: number }) {
     [draft],
   );
 
+  function share(code: string): string {
+    if (!draft || weightSum <= 0) return "0%";
+    return `${Math.round(((draft.weights[code] ?? 0) / weightSum) * 100)}%`;
+  }
+
   function setWeight(code: string, value: number) {
     if (!draft) return;
     setDraft({ ...draft, weights: { ...draft.weights, [code]: value } });
@@ -108,15 +113,15 @@ export function Settings({ liveTick }: { liveTick: number }) {
           <p className="eyebrow">МОДЕЛЬ · ВЕРСИЯ {draft.version}</p>
           <h1>Настройки риска</h1>
           <p className="page__subtitle">
-            Веса нормируются при расчёте: можно ставить 0, чтобы отключить признак. Изменения
-            применяются сразу и сохраняются в базе.
+            Настройте, что важнее для вашего бизнеса. Веса относительные — сумма не обязана быть
+            равна 1, ноль отключает признак.
           </p>
         </div>
         <div className="settings-actions">
           <button className="button button--ghost" onClick={reset} disabled={busy}>
             Сбросить
           </button>
-          <button className="button button--primary" onClick={save} disabled={busy}>
+          <button className="button button--primary" onClick={save} disabled={busy || weightSum <= 0}>
             {busy ? "Пересчитываем…" : "Сохранить"}
           </button>
         </div>
@@ -127,13 +132,29 @@ export function Settings({ liveTick }: { liveTick: number }) {
 
       <div className="settings-layout">
         <div className="settings-main">
+          <section className="card card--info">
+            <div className="formula-box">
+              <span className="formula-box__label">Как считается score</span>
+              <code>100 × Σ(w × f) / Σw</code>
+            </div>
+            <p>
+              <b>w</b> — вес признака, <b>f</b> — его значение от 0 до 1. Веса сравниваются
+              относительно друг друга: важна пропорция, а не абсолютная сумма. Поставьте 0,
+              чтобы полностью отключить признак. Итог ограничен 100 баллами.
+            </p>
+          </section>
+
           <section className="card">
             <div className="card__heading">
               <div>
                 <p className="card__label">Коэффициенты</p>
                 <h2>Веса признаков</h2>
               </div>
-              <span className="card__meta">сумма {weightSum.toFixed(2)}</span>
+              <div className="weight-sum">
+                <span>Σ весов</span>
+                <strong>{weightSum.toFixed(2)}</strong>
+                <small>нормализуется</small>
+              </div>
             </div>
             <div className="weights">
               {draft.features.map((feature) => (
@@ -143,8 +164,15 @@ export function Settings({ liveTick }: { liveTick: number }) {
                       <strong>{feature.title}</strong>
                       <p>{feature.description}</p>
                     </div>
-                    <span className="weight-row__value">{draft.weights[feature.code]?.toFixed(2) ?? "0.00"}</span>
+                    <div className="weight-row__value">
+                      <strong>{draft.weights[feature.code]?.toFixed(2) ?? "0.00"}</strong>
+                      <small>{share(feature.code)} влияния</small>
+                    </div>
                   </div>
+                  <p className="weight-row__scale">
+                    <span><b>0</b> — {feature.zero}</span>
+                    <span><b>1</b> — {feature.one}</span>
+                  </p>
                   <div className="weight-row__controls">
                     <input
                       type="range"
@@ -174,6 +202,27 @@ export function Settings({ liveTick }: { liveTick: number }) {
               <div>
                 <p className="card__label">Пороги</p>
                 <h2>Уровни риска</h2>
+              </div>
+            </div>
+            <p className="muted">
+              Пороги не меняют score — они только относят клиента к группе. Ниже 40 — наблюдать,
+              40–69 — программа удержания, 70+ — звонить сегодня.
+            </p>
+            <div className="threshold-map">
+              <div className="threshold-map__item threshold-map__item--low">
+                <span>0–{Math.round(draft.thresholds.medium)}</span>
+                <strong>Низкий</strong>
+                <small>{summary?.countsByLevel.low ?? "—"} клиентов</small>
+              </div>
+              <div className="threshold-map__item threshold-map__item--medium">
+                <span>{Math.round(draft.thresholds.medium)}–{Math.round(draft.thresholds.high)}</span>
+                <strong>Средний</strong>
+                <small>{summary?.countsByLevel.medium ?? "—"} клиентов</small>
+              </div>
+              <div className="threshold-map__item threshold-map__item--high">
+                <span>{Math.round(draft.thresholds.high)}+</span>
+                <strong>Высокий</strong>
+                <small>{summary?.countsByLevel.high ?? "—"} клиентов</small>
               </div>
             </div>
             <div className="thresholds">
@@ -233,9 +282,9 @@ export function Settings({ liveTick }: { liveTick: number }) {
               }
             />
             <div className="range-labels">
-              <span>0%</span>
-              <span>50%</span>
-              <span>100%</span>
+              <span>0% — не учитывать</span>
+              <span>50% — рекомендуем</span>
+              <span>100% — вычитать полностью</span>
             </div>
             <label className="checkbox">
               <input

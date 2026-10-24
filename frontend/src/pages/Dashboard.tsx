@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { api, ApiError } from "../api";
 import type { CustomerListItem, Level, Summary } from "../types";
-import { dateTime, EmptyState, ErrorBox, LevelBadge, money, number, servicesWord, Spinner } from "../components/ui";
+import { DataStatus, EmptyState, ErrorBox, LevelBadge, money, number, servicesWord, Spinner } from "../components/ui";
 
 type SortKey = "id" | "email" | "balance" | "totalReplenished" | "score" | "expectedLoss";
 
@@ -101,11 +101,18 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
     <div className="page">
       <header className="page__header">
         <div>
-          <p className="eyebrow">СНИМОК · {summary ? dateTime(summary.asOf) : "—"}</p>
+          <p className="eyebrow">ОБЗОР · RETENTION</p>
           <h1>Кому звонить сегодня</h1>
           <p className="page__subtitle">
             Риск оттока, причина и деньги, которые можно потерять при ближайшем продлении.
           </p>
+          {summary ? (
+            <DataStatus
+              asOf={summary.asOf}
+              sourceUpdatedAt={summary.sourceUpdatedAt}
+              updatedAt={summary.updatedAt}
+            />
+          ) : null}
         </div>
         <div className="live-indicator" title="Обновляется автоматически">
           <span className="live-indicator__dot" />
@@ -231,12 +238,16 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
         ) : items.length === 0 ? (
           <EmptyState title="Ничего не найдено" text="Смените фильтр или поисковый запрос." />
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap table-wrap--clients">
             <table className="table">
               <thead>
                 <tr>
                   {COLUMNS.map((column) => (
-                    <th key={column.key} className={column.className}>
+                    <th
+                      key={column.key}
+                      className={column.className}
+                      aria-sort={sort === column.key ? (order === "desc" ? "descending" : "ascending") : "none"}
+                    >
                       <button className="sort-button" onClick={() => toggleSort(column.key)}>
                         {column.label}
                         <span className={`sort-arrow ${sort === column.key ? "sort-arrow--active" : ""}`}>
@@ -289,6 +300,22 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
             </table>
           </div>
         )}
+
+        <div className="mobile-clients">
+          {items.map((item) => (
+            <button className="mobile-client" key={item.id} onClick={() => onSelect(item.id)}>
+              <div className="mobile-client__head">
+                <span className="mobile-client__email">{item.email}</span>
+                <LevelBadge level={item.level} />
+              </div>
+              <div className="mobile-client__meta">
+                <span>Score {item.score === null ? "—" : Math.round(item.score)}</span>
+                <span>{servicesWord(item.servicesAtRisk)} под риском</span>
+                <span>{money(item.expectedLoss)}</span>
+              </div>
+            </button>
+          ))}
+        </div>
 
         <div className="pagination">
           <span className="muted">

@@ -94,6 +94,7 @@ def _summary_api(summary: dict[str, Any]) -> dict[str, Any]:
         "underfundedCustomers": summary.get("underfundedCustomers", 0),
         "avgScore": summary["avgScore"],
         "asOf": summary["asOf"],
+        "sourceUpdatedAt": summary.get("sourceUpdatedAt", summary["updatedAt"]),
         "updatedAt": summary["updatedAt"],
         "currency": summary.get("currency", "EUR"),
     }

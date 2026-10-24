@@ -106,6 +106,15 @@ def _insert_snapshot(conn: sqlite3.Connection, data: dict[str, list[dict[str, An
     )
 
 
+def ensure_source_meta(conn: sqlite3.Connection) -> str:
+    row = conn.execute("SELECT updated_at FROM source_meta WHERE id = 1").fetchone()
+    if row is not None:
+        return row["updated_at"]
+    updated = _as_iso(datetime.now(timezone.utc))
+    conn.execute("INSERT INTO source_meta (id, updated_at) VALUES (1, ?)", (updated,))
+    return updated
+
+
 def replace_snapshot(conn: sqlite3.Connection, snapshot: SnapshotIn) -> dict[str, int]:
     data = validate_snapshot(snapshot)
     conn.execute("DELETE FROM customer_scores")
@@ -114,6 +123,11 @@ def replace_snapshot(conn: sqlite3.Connection, snapshot: SnapshotIn) -> dict[str
     conn.execute("DELETE FROM services")
     conn.execute("DELETE FROM accounts")
     _insert_snapshot(conn, data)
+    conn.execute(
+        "INSERT INTO source_meta (id, updated_at) VALUES (1, ?) "
+        "ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at",
+        (_as_iso(datetime.now(timezone.utc)),),
+    )
     return {key: len(value) for key, value in data.items()}
 
 

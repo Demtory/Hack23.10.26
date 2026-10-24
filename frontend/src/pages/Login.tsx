@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api, ApiError } from "../api";
+import { Brand } from "../components/ui";
 import type { User } from "../types";
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {
@@ -25,13 +26,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <div className="login">
       <div className="login__aside">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
+        <Brand dark />
         <div className="login__pitch">
           <p className="eyebrow">ХАКАТОН РНД · MIDDLE</p>
           <h1>Кому звонить сегодня — и сколько это стоит.</h1>
@@ -60,7 +55,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <div className="login__panel">
         <form className="login__card" onSubmit={submit}>
           <p className="eyebrow">ВХОД В ПАНЕЛЬ</p>
-          <h2>Аналитик на связи</h2>
+          <h2>Рабочий кабинет</h2>
           <p className="muted">Доступ защищает клиентские данные и настройки модели.</p>
 
           <label className="field">

@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     type TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS source_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     payload TEXT NOT NULL,

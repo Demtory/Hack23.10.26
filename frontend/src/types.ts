@@ -96,6 +96,7 @@ export interface Summary {
   underfundedCustomers: number;
   avgScore: number | null;
   asOf: string;
+  sourceUpdatedAt: string;
   updatedAt: string;
   currency: string;
 }
@@ -104,6 +105,8 @@ export interface FeatureMeta {
   code: string;
   title: string;
   description: string;
+  zero: string;
+  one: string;
   min: number;
   max: number;
   step: number;

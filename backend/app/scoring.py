@@ -27,6 +27,8 @@ FEATURES_META = [
         "code": "expiry_pressure",
         "title": "Срочность продления",
         "description": "Сколько дней осталось до конца оплаченного периода",
+        "zero": "Продление ещё не скоро или включено автопродление с запасом денег",
+        "one": "Срок истекает в ближайшие дни, автопродление не спасёт",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -36,6 +38,8 @@ FEATURES_META = [
         "code": "funds_gap",
         "title": "Нехватка денег",
         "description": "Хватает ли баланса на ближайшее продление",
+        "zero": "Баланса хватает с запасом на несколько платежей",
+        "one": "Денег не хватает уже на ближайшее продление",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -45,6 +49,8 @@ FEATURES_META = [
         "code": "autorenew_off",
         "title": "Автопродление отключено",
         "description": "Клиент сам отключил автоматическое продление",
+        "zero": "Автопродление включено",
+        "one": "Клиент отключил автопродление",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -53,7 +59,9 @@ FEATURES_META = [
     {
         "code": "status_pressure",
         "title": "Статус услуги",
-        "description": "prolong_wait, blocked, suspended или active",
+        "description": "Насколько критично текущее состояние услуги",
+        "zero": "Услуга активна",
+        "one": "Услуга ждёт оплаты или заблокирована",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -63,6 +71,8 @@ FEATURES_META = [
         "code": "payment_history",
         "title": "История платежей",
         "description": "Были ли неоплаченные счета",
+        "zero": "Неоплаченных счетов нет",
+        "one": "Есть неоплаченное продление",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -72,6 +82,8 @@ FEATURES_META = [
         "code": "commitment",
         "title": "Лояльность",
         "description": "Отношение пополнений к стоимости услуг",
+        "zero": "Клиент много раз пополнял баланс",
+        "one": "Пополнений почти не было",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -265,13 +277,14 @@ def _score_service(
     if service["status"] in ("prolong_wait", "blocked"):
         floor = floors[service["status"]]
         if score < floor:
+            status_name = {"prolong_wait": "Ждёт оплаты", "blocked": "Заблокирована"}.get(service["status"], service["status"])
             rules.append(explanation_rule("status_floor", "service", service["id"],
-                f"Статус {service['status']}: применён минимум {floor:g}", score, floor))
+                f"Статус «{status_name}»: оценка поднята до {floor:g}", score, floor))
             score = floor
     if stale and score < floors["stale"]:
         floor = floors["stale"]
         rules.append(explanation_rule("stale_status_floor", "service", service["id"],
-            f"Устаревший статус: применён минимум {floor:g}", score, floor))
+            f"Срок истёк, статус не обновлён: оценка поднята до {floor:g}", score, floor))
         score = floor
     drivers.sort(key=lambda item: item["contribution"], reverse=True)
 
@@ -314,6 +327,7 @@ def compute(
     settings: dict[str, Any],
     as_of: datetime,
     updated_at: datetime,
+    source_updated_at: str | None = None,
 ) -> dict[str, Any]:
     by_owner: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for service in services:
@@ -397,13 +411,19 @@ def compute(
         if bonus:
             related = [service["id"] for service, result in scored
                        if result["score"] >= settings["thresholds"]["medium"]]
+            points_word = "балл" if bonus % 10 == 1 and bonus % 100 != 11 else (
+                "балла" if 2 <= bonus % 10 <= 4 and not 12 <= bonus % 100 <= 14 else "баллов"
+            )
+            services_word = "услуга" if at_risk_services % 10 == 1 and at_risk_services % 100 != 11 else (
+                "услуги" if 2 <= at_risk_services % 10 <= 4 and not 12 <= at_risk_services % 100 <= 14 else "услуг"
+            )
             customer_rules.append(explanation_rule("customer_bonus", "customer", None,
-                f"Услуг под риском: {at_risk_services}; добавка {bonus:g} баллов до ограничения100",
+                f"{at_risk_services} {services_word} под риском: +{bonus:g} {points_word}",
                 base_score, uncapped, related))
         customer_score = min(100.0, uncapped)
         if uncapped > 100:
             customer_rules.append(explanation_rule("score_cap", "customer", None,
-                "Ограничение итогового score: 100", uncapped, customer_score))
+                "Оценка ограничена 100 баллами", uncapped, customer_score))
         customer_level = level_for(customer_score, settings["thresholds"])
         counts[customer_level] += 1
         scored_scores.append(customer_score)
@@ -442,9 +462,6 @@ def compute(
         summary_text = f"{top_service['name']}: {', '.join(labels)}" if labels else {
             "low": "Риск ниже порога", "medium": "Средний риск", "high": "Высокий риск"
         }[customer_level]
-        rule_labels = [rule["label"] for rule in top_result["explanationRules"] + customer_rules]
-        if rule_labels:
-            summary_text += "; " + "; ".join(rule_labels)
         remaining = len(scored) - 1
         if remaining > 0:
             if remaining % 10 == 1 and remaining % 100 != 11:
@@ -503,6 +520,7 @@ def compute(
         "underfundedCustomers": underfunded,
         "avgScore": round(sum(scored_scores) / len(scored_scores), 1) if scored_scores else None,
         "asOf": iso_z(as_of),
+        "sourceUpdatedAt": source_updated_at or iso_z(updated_at),
         "updatedAt": iso_z(updated_at),
         "currency": "EUR",
     }

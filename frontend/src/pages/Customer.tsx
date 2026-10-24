@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
+import { Icon } from "../components/ui";
 import type { CustomerDetail, RuleExplanation, Service } from "../types";
 import {
   servicesWord,
@@ -77,6 +78,8 @@ export function Customer({
             </div>
           </header>
 
+          {customer.score !== null ? <ActionCallout customer={customer} /> : null}
+
           {customer.score === null ? (
             <EmptyState title="Нет оценки" text={customer.unknownReason ?? "Недостаточно данных"} />
           ) : (
@@ -150,10 +153,7 @@ export function Customer({
                     ))}
                     {customer.drivers.length === 0 ? <p className="muted">Явных взвешенных причин нет.</p> : null}
                   </div>
-                  <RuleList rules={customer.explanationRules ?? []} title="Правила клиента" />
-                  {customer.services.map((service) => (
-                    <RuleList key={service.id} rules={service.explanationRules ?? []} title={`Правила услуги ${service.name}`} />
-                  ))}
+                  <RulesDisclosure customer={customer} />
                 </article>
 
                 <article className="card">
@@ -263,17 +263,90 @@ function ServiceRow({ service }: { service: Service }) {
 }
 
 
-function RuleList({ rules, title }: { rules: RuleExplanation[]; title: string }) {
+function nextAction(customer: CustomerDetail): { label: string; hint: string } {
+  const services = customer.services;
+  if (services.some((service) => service.status === "prolong_wait")) {
+    return { label: "Позвонить сегодня", hint: "Услуга ждёт оплаты — окно до удаления 5 дней" };
+  }
+  if (services.some((service) => (service.values.funds_gap ?? 0) >= 1)) {
+    return { label: "Напомнить пополнить", hint: "Баланса не хватает на ближайшее продление" };
+  }
+  if (services.some((service) => !service.autoProlong && service.expiryDays <= 7)) {
+    return { label: "Предложить автопродление", hint: "Срок скоро истечёт, автопродление выключено" };
+  }
+  if (services.some((service) => service.status === "suspended")) {
+    return { label: "Выяснить причину", hint: "Клиент платит за выключенную услугу" };
+  }
+  return { label: "Наблюдать", hint: "Критичных сигналов сейчас нет" };
+}
+
+function ActionCallout({ customer }: { customer: CustomerDetail }) {
+  const action = nextAction(customer);
+  return (
+    <section className={`action-callout action-callout--${customer.level}`} aria-label="Следующее действие">
+      <span className="action-callout__icon">
+        <Icon name={customer.level === "high" ? "alert" : "check"} size={20} />
+      </span>
+      <div>
+        <p className="action-callout__label">Следующее действие</p>
+        <strong>{action.label}</strong>
+        <span>{action.hint}</span>
+      </div>
+    </section>
+  );
+}
+
+function RulesDisclosure({ customer }: { customer: CustomerDetail }) {
+  const serviceRules = customer.services.flatMap((service) =>
+    (service.explanationRules ?? []).map((rule) => ({ ...rule, serviceName: service.name })),
+  );
+  const hasRules = (customer.explanationRules?.length ?? 0) + serviceRules.length > 0;
+  if (!hasRules) return null;
+  return (
+    <details className="rules-disclosure">
+      <summary>
+        Детали расчёта
+        <Icon name="chevron-down" size={16} />
+      </summary>
+      <div className="rules-body">
+        <RuleList rules={customer.explanationRules ?? []} title="Клиент" />
+        {serviceRules.length > 0 ? (
+          <RuleList
+            rules={serviceRules}
+            title="Услуги"
+            renderTitle={(rule) => (rule as RuleExplanation & { serviceName?: string }).serviceName}
+          />
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function RuleList({
+  rules,
+  title,
+  renderTitle,
+}: {
+  rules: RuleExplanation[];
+  title: string;
+  renderTitle?: (rule: RuleExplanation) => string | undefined;
+}) {
   if (rules.length === 0) return null;
   return (
-    <section aria-label={title}>
-      <h3>{title}</h3>
+    <div className="rule-group">
+      <h4>{title}</h4>
       {rules.map((rule, index) => (
-        <p key={`${rule.code}-${rule.serviceId}-${index}`}>
-          {rule.label}: {rule.beforeScore.toFixed(1)} → {rule.afterScore.toFixed(1)}
-          {" "}({rule.delta > 0 ? "+" : ""}{rule.delta.toFixed(1)} баллов)
-        </p>
+        <div className="rule-row" key={`${rule.code}-${rule.serviceId}-${index}`}>
+          <span>
+            {renderTitle?.(rule) ? <b>{renderTitle(rule)} · </b> : null}
+            {rule.label}
+          </span>
+          <span className="rule-row__score">
+            {rule.beforeScore.toFixed(1)} → {rule.afterScore.toFixed(1)}
+            <small>{rule.delta > 0 ? "+" : ""}{rule.delta.toFixed(1)}</small>
+          </span>
+        </div>
       ))}
-    </section>
+    </div>
   );
 }

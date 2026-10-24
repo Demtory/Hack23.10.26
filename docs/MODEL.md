@@ -296,8 +296,11 @@ covered_loss  = Σ( P × price × mitigation )
 }
 ```
 
-Валидация: веса `> 0`, сумма `> 0`; `0 < medium < high < 100`;
+Валидация: веса `≥ 0`, сумма `> 0`; `0 < medium < high < 100`;
 `0 ≤ balance_mitigation ≤ 1`; `steepness > 0`.
+
+`GET /model/settings` вместе с весами отдаёт `features` с полями `zero`/`one` —
+пояснениями «что значит 0» и «что значит 1» для панели.
 
 ---
 

@@ -6,7 +6,7 @@ import { Customer } from "./pages/Customer";
 import { Settings } from "./pages/Settings";
 import { Data } from "./pages/Data";
 import type { User } from "./types";
-import { Spinner } from "./components/ui";
+import { Brand, Icon, Spinner } from "./components/ui";
 
 type Page = "dashboard" | "settings" | "data";
 
@@ -52,13 +52,7 @@ export default function App() {
   if (user === undefined) {
     return (
       <div className="boot">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
+        <Brand dark />
         <Spinner label="Поднимаем панель" />
       </div>
     );
@@ -71,25 +65,19 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
+        <Brand dark />
 
         <nav className="nav" aria-label="Разделы">
           <button className={`nav__item ${page === "dashboard" && !selectedId ? "nav__item--active" : ""}`} onClick={() => navigate("dashboard")}>
-            <span className="nav__index">01</span>
-            <span>Рейтинг</span>
+            <Icon name="overview" size={17} />
+            <span>Обзор</span>
           </button>
           <button className={`nav__item ${page === "settings" ? "nav__item--active" : ""}`} onClick={() => navigate("settings")}>
-            <span className="nav__index">02</span>
-            <span>Настройки модели</span>
+            <Icon name="sliders" size={17} />
+            <span>Модель</span>
           </button>
           <button className={`nav__item ${page === "data" ? "nav__item--active" : ""}`} onClick={() => navigate("data")}>
-            <span className="nav__index">03</span>
+            <Icon name="database" size={17} />
             <span>Данные</span>
           </button>
         </nav>
@@ -108,6 +96,7 @@ export default function App() {
             </div>
           </div>
           <button className="button button--sidebar" onClick={logout}>
+            <Icon name="logout" size={15} />
             Выйти
           </button>
         </div>

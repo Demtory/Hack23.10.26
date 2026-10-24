@@ -162,6 +162,7 @@ transactions(id, service_id → services.id, amount_cents, status, type,
              performed_at, created_at)
 
 settings(id=1, payload JSON, version, updated_at)
+source_meta(id=1, updated_at)
 score_runs(id, as_of, created_at, settings_version, summary JSON)
 customer_scores(run_id, account_id, score NULL, level, confidence,
                 drivers JSON, expected_loss_cents, amount_at_risk_cents,
@@ -275,7 +276,7 @@ GET /api/v1/customers?sort=balance&order=desc&level=high&q=ivan&page=1&pageSize=
 
 | Метод | Путь | Ответ |
 |---|---|---|
-| GET | `/analytics/summary` | `countsByLevel`, `unknown`, `expectedLoss`, `amountAtRisk`, `coverage`, `asOf`, `updatedAt` |
+| GET | `/analytics/summary` | `countsByLevel`, `unknown`, `expectedLoss`, `amountAtRisk`, `coverage`, `asOf`, `sourceUpdatedAt`, `updatedAt` |
 | GET | `/model/settings` | weights, thresholds, probability, money, features metadata, version |
 | PATCH | `/model/settings` | обновлённые настройки + summary после пересчёта |
 | PUT | `/source/snapshot` | `{accounts, services, transactions}` в формате `data.json` → counts + summary |

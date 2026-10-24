@@ -23,7 +23,9 @@ def recompute(
     accounts = _rows(conn, "SELECT * FROM accounts ORDER BY id")
     services = _rows(conn, "SELECT * FROM services ORDER BY id")
     transactions = _rows(conn, "SELECT * FROM transactions ORDER BY id")
-    result = compute(accounts, services, transactions, settings, as_of, datetime.now(timezone.utc))
+    source_row = conn.execute("SELECT updated_at FROM source_meta WHERE id = 1").fetchone()
+    source_updated_at = source_row["updated_at"] if source_row else None
+    result = compute(accounts, services, transactions, settings, as_of, datetime.now(timezone.utc), source_updated_at)
     summary = result["summary"]
 
     # Fail before any publication on non-finite JSON or an unrepresentable SQL value.

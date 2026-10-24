@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Snapshot, Summary } from "../types";
-import { dateTime, ErrorBox, money, Spinner } from "../components/ui";
+import { DataStatus, dateTime, ErrorBox, money, Spinner } from "../components/ui";
 
 export function Data({ liveTick }: { liveTick: number }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -71,7 +71,7 @@ export function Data({ liveTick }: { liveTick: number }) {
       <header className="page__header">
         <div>
           <p className="eyebrow">ИСТОЧНИК ДАННЫХ</p>
-          <h1>Снимок</h1>
+          <h1>Данные</h1>
           <p className="page__subtitle">
             Полная замена данных через API. Формат — как у исходного <code>data.json</code>.
             После загрузки модель пересчитывается автоматически.
@@ -81,6 +81,14 @@ export function Data({ liveTick }: { liveTick: number }) {
           Скачать текущий JSON
         </button>
       </header>
+
+      {summary ? (
+        <DataStatus
+          asOf={summary.asOf}
+          sourceUpdatedAt={summary.sourceUpdatedAt}
+          updatedAt={summary.updatedAt}
+        />
+      ) : null}
 
       {error ? <ErrorBox message={error} /> : null}
       {status ? <div className="notice">{status}</div> : null}
@@ -114,6 +122,18 @@ export function Data({ liveTick }: { liveTick: number }) {
           )}
           {summary ? (
             <dl className="facts facts--compact">
+              <div>
+                <dt>Данные на</dt>
+                <dd>{dateTime(summary.asOf)}</dd>
+              </div>
+              <div>
+                <dt>Загружено</dt>
+                <dd>{dateTime(summary.sourceUpdatedAt)}</dd>
+              </div>
+              <div>
+                <dt>Пересчитано</dt>
+                <dd>{dateTime(summary.updatedAt)}</dd>
+              </div>
               <div>
                 <dt>Ожидаемые потери</dt>
                 <dd>{money(summary.expectedLoss)}</dd>
