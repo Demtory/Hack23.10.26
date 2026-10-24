@@ -868,19 +868,26 @@ def source_event(body: SourceEventIn, config: Config = Depends(get_config),
             if not run or run['id'] != body.expected_run_id:
                 raise HTTPException(409, detail='Данные изменились. Обновите снимок перед повтором события.')
             snapshot = _source_snapshot(conn)
-            account = next((a for a in snapshot['accounts'] if a['id'] == 6), None)
+            cid = body.customer_id if body.customer_id is not None else 6
+            account = next((a for a in snapshot['accounts'] if a['id'] == cid), None)
             if account is None:
-                raise HTTPException(409, detail='Демонстрация доступна только при наличии клиента ID 6.')
+                raise HTTPException(409, detail=f'Клиент ID {cid} не найден в снимке.')
             if body.action == 'topup_20':
                 account['balance'] += 2000
+            elif body.action == 'deduct_20':
+                account['balance'] = max(0, account['balance'] - 2000)
             else:
-                service = next((s for s in snapshot['services'] if s['ownerId'] == 6 and s['status'] not in ('deleted','blocked')), None)
+                service = next((s for s in snapshot['services'] if s['ownerId'] == cid and s['status'] not in ('deleted','blocked')), None)
                 if service is None:
-                    raise HTTPException(409, detail='У клиента ID 6 нет доступных услуг для этого события.')
+                    raise HTTPException(409, detail=f'У клиента ID {cid} нет доступных услуг для этого события.')
                 if body.action == 'autoprolong_off':
                     service['autoProlong'] = False
-                else:
+                elif body.action == 'autoprolong_on':
+                    service['autoProlong'] = True
+                elif body.action == 'suspend_server':
                     service['status'] = 'suspended'
+                elif body.action == 'activate_server':
+                    service['status'] = 'active'
             checked = SnapshotIn.model_validate(snapshot)
             validate_snapshot(checked)
             counts = replace_snapshot(conn, checked)

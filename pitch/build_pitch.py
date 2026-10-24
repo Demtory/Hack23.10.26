@@ -1,39 +1,96 @@
 """Сборка питч-деки «ОТТОК · Risk Desk» (python-pptx).
 
+Строгое соответствие Brand Guidelines Aéza:
+- Цвета:
+    * PANTONE 298 C (#4CC6F1) — основной светло-голубой акцент
+    * PANTONE BLACK C (#000000) — глубокий базовый чёрный
+    * PANTONE COOL GRAY 1 C (#F4F4F4) — нейтральный светлый фон
+    * PANTONE 534 C (#182D48) — тёмно-синий индиго для контрастных карточек
+    * PANTONE 7579 C (#E97C35) — фирменный оранжевый акцент для риска
+- Шрифты:
+    * Exo 2 — основной (заголовки, цифры, акценты)
+    * Inter — дополнительный (подписи, списки, буллеты)
+- Структура (7 слайдов на 3 минуты):
+    1. Титул (18 сек) — позиционирование
+    2. Специфика хостинга (32 сек) — 67,53 € под риском, suspended/prolong_wait
+    3. Решение кейса (25 сек) — большой чёткий скриншот дашборда
+    4. Действие и retention (25 сек) — крупное окно персонального письма
+    5. Методология и честность (30 сек) — почему не ML, 7 признаков, формула денег
+    6. Инженерия и прод (25 сек) — docker compose up, 449 тестов, 10 000 клиентов
+    7. Итог и Q&A (15 сек) — результат, прямой QR-код, Swagger, /metrics
+
 Запуск:
-    python build_pitch.py            # создаст risk-desk-pitch.pptx рядом
+    python pitch/build_pitch.py
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+from PIL import Image
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Inches, Pt
+import qrcode
 
 ROOT = Path(__file__).resolve().parents[1]
 SHOTS = ROOT / "docs" / "screenshots"
-OUT = Path(__file__).resolve().parent / "risk-desk-pitch.pptx"
+PITCH_DIR = Path(__file__).resolve().parent
+OUT = PITCH_DIR / "risk-desk-pitch.pptx"
+QR_PATH = PITCH_DIR / "qr-repo.png"
+LOGO_PATH = PITCH_DIR / "aeza-logo.png"
+MARK_PATH = PITCH_DIR / "aeza-mark.png"
+DASH_CROP_PATH = PITCH_DIR / "dashboard-crop.png"
+EMAIL_CROP_PATH = PITCH_DIR / "email-crop.png"
 
-BG = RGBColor(0xF4, 0xF4, 0xF4)
+REPO_URL = "https://github.com/Demtory/Hack23.10.26"
+
+# Фирменная палитра Aéza Brand Guidelines
+PANTONE_298C = RGBColor(0x4C, 0xC6, 0xF1)     # Основной светло-голубой
+PANTONE_BLACK = RGBColor(0x00, 0x00, 0x00)    # Базовый чёрный
+PANTONE_GRAY = RGBColor(0xF4, 0xF4, 0xF4)     # Cool Gray 1 C (нейтральный фон)
+PANTONE_NAVY = RGBColor(0x18, 0x2D, 0x48)     # Pantone 534 C (тёмно-синий)
+PANTONE_ORANGE = RGBColor(0xE9, 0x7C, 0x35)   # Pantone 7579 C (акцентный оранжевый для риска)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-INK = RGBColor(0x00, 0x00, 0x00)
-MUTED = RGBColor(0x18, 0x2D, 0x48)
-ACCENT = RGBColor(0x4C, 0xC6, 0xF1)
-LINE = RGBColor(0xDD, 0xE2, 0xEA)
-HIGH = RGBColor(0xB4, 0x23, 0x18)
+LINE_COLOR = RGBColor(0xDD, 0xE2, 0xEA)
 
 HEAD = "Exo 2"
 BODY = "Inter"
 
 W, H = 13.333, 7.5
-MARGIN = 0.9
+MARGIN = 0.85
 
 
-def rgb_text(box, value, size, *, bold=False, color=INK, font=BODY, align=PP_ALIGN.LEFT,
+def ensure_assets() -> None:
+    # 1. Прямой QR-код без редиректов
+    if not QR_PATH.exists():
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=12,
+            border=2,
+        )
+        qr.add_data(REPO_URL)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(str(QR_PATH))
+
+    # 2. Крупный скриншот дашборда (верхний вьюпорт 1440x920)
+    if not DASH_CROP_PATH.exists() and (SHOTS / "02-overview-1440.png").exists():
+        im1 = Image.open(str(SHOTS / "02-overview-1440.png"))
+        crop1 = im1.crop((0, 0, 1440, 920))
+        crop1.save(str(DASH_CROP_PATH))
+
+    # 3. Крупный скриншот модального окна письма (центрированный бокс)
+    if not EMAIL_CROP_PATH.exists() and (SHOTS / "10-email-dialog.png").exists():
+        im2 = Image.open(str(SHOTS / "10-email-dialog.png"))
+        crop2 = im2.crop((440, 75, 1000, 825))
+        crop2.save(str(EMAIL_CROP_PATH))
+
+
+def rgb_text(box, value, size, *, bold=False, color=PANTONE_BLACK, font=BODY, align=PP_ALIGN.LEFT,
              line_spacing=1.15, space_after=0):
     tf = box.text_frame
     tf.word_wrap = True
@@ -61,8 +118,8 @@ def text(slide, left, top, width, height, value, size, **kwargs):
     return rgb_text(box, value, size, **kwargs)
 
 
-def bullets(slide, left, top, width, height, items, *, size=15, gap=10, color=INK):
-    """items: список (уровень, текст); уровень 0 — с маркером, 1 — подпункт."""
+def bullets(slide, left, top, width, height, items, *, size=17, gap=12, color=PANTONE_BLACK):
+    """items: список кортежей (level, bold_prefix, text_body)."""
     box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
     tf = box.text_frame
     tf.word_wrap = True
@@ -70,27 +127,45 @@ def bullets(slide, left, top, width, height, items, *, size=15, gap=10, color=IN
     tf.margin_right = 0
     tf.margin_top = 0
     tf.margin_bottom = 0
-    for index, (level, value) in enumerate(items):
+    for index, item in enumerate(items):
+        level = item[0]
+        prefix_bold = item[1]
+        body = item[2]
+
         paragraph = tf.paragraphs[0] if index == 0 else tf.add_paragraph()
-        paragraph.line_spacing = 1.3
+        paragraph.line_spacing = 1.25
         paragraph.space_after = Pt(gap)
-        prefix = "—  " if level == 0 else "·  "
         _hanging_indent(paragraph, level)
+
+        marker = paragraph.add_run()
+        marker.text = "—  " if level == 0 else "   ·  "
+        marker.font.size = Pt(size)
+        marker.font.color.rgb = PANTONE_298C if level == 0 else PANTONE_NAVY
+        marker.font.bold = True
+        marker.font.name = HEAD
+
+        if prefix_bold:
+            bold_run = paragraph.add_run()
+            bold_run.text = prefix_bold + " "
+            bold_run.font.size = Pt(size)
+            bold_run.font.bold = True
+            bold_run.font.color.rgb = color
+            bold_run.font.name = HEAD
+
         run = paragraph.add_run()
-        run.text = prefix + value
-        run.font.size = Pt(size if level == 0 else size - 2)
-        run.font.color.rgb = color if level == 0 else MUTED
+        run.text = body
+        run.font.size = Pt(size)
+        run.font.bold = False
+        run.font.color.rgb = color
         run.font.name = BODY
-        if level == 1:
-            paragraph.level = 1
     return box
 
 
 def _hanging_indent(paragraph, level: int) -> None:
     p_pr = paragraph._p.get_or_add_pPr()
-    left = 0.0 if level == 0 else 0.28
-    p_pr.set("marL", str(int(Inches(left + 0.3))))
-    p_pr.set("indent", str(int(-Inches(0.3))))
+    left = 0.0 if level == 0 else 0.35
+    p_pr.set("marL", str(int(Inches(left + 0.35))))
+    p_pr.set("indent", str(int(-Inches(0.35))))
 
 
 def rect(slide, left, top, width, height, color, *, line=None, radius=False):
@@ -102,13 +177,13 @@ def rect(slide, left, top, width, height, color, *, line=None, radius=False):
         shape.line.fill.background()
     else:
         shape.line.color.rgb = line
-        shape.line.width = Pt(1)
+        shape.line.width = Pt(1.5)
     shape.shadow.inherit = False
     sp_pr = shape._element.spPr
     if sp_pr.find(qn("a:effectLst")) is None:
         sp_pr.append(sp_pr.makeelement(qn("a:effectLst"), {}))
     if radius:
-        shape.adjustments[0] = 0.08
+        shape.adjustments[0] = 0.06
     return shape
 
 
@@ -116,22 +191,27 @@ def new_slide(prs, *, background=WHITE, footer=True, number=None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     slide.background.fill.solid()
     slide.background.fill.fore_color.rgb = background
+
+    rect(slide, 0, 0, W, 0.08, PANTONE_298C)
+
     if footer:
-        rect(slide, MARGIN, 7.02, W - 2 * MARGIN, 0.01, LINE)
-        text(slide, MARGIN, 7.1, 6, 0.3, "ОТТОК · Risk Desk", 9, color=MUTED, font=HEAD)
+        rect(slide, MARGIN, 7.02, W - 2 * MARGIN, 0.015, LINE_COLOR)
+        if MARK_PATH.exists():
+            image(slide, MARK_PATH, MARGIN, 7.06, 0.22, border=False)
+        text(slide, MARGIN + 0.32, 7.08, 6, 0.3, "AÉZA · ОТТОК · Risk Desk", 10, bold=True, color=PANTONE_NAVY, font=HEAD)
         if number is not None:
-            text(slide, W - MARGIN - 0.6, 7.1, 0.6, 0.3, f"{number:02d}", 9, color=MUTED,
+            text(slide, W - MARGIN - 0.8, 7.08, 0.8, 0.3, f"{number:02d} / 07", 10, bold=True, color=PANTONE_NAVY,
                  align=PP_ALIGN.RIGHT, font=HEAD)
     return slide
 
 
 def eyebrow(slide, value):
-    text(slide, MARGIN, 0.55, 8, 0.3, value.upper(), 10, bold=True, color=MUTED, font=BODY)
+    text(slide, MARGIN, 0.45, 9, 0.3, value.upper(), 11, bold=True, color=PANTONE_NAVY, font=HEAD)
 
 
-def title(slide, value, *, size=32, top=0.95, width=11.4):
-    text(slide, MARGIN, top, width, 1.1, value, size, bold=True, font=HEAD)
-    rect(slide, MARGIN, top + (1.0 if size <= 32 else 1.2), 0.9, 0.06, ACCENT)
+def title(slide, value, *, size=34, top=0.82, width=11.6):
+    text(slide, MARGIN, top, width, 0.95, value, size, bold=True, font=HEAD, color=PANTONE_BLACK)
+    rect(slide, MARGIN, top + 0.98, 1.2, 0.07, PANTONE_298C)
 
 
 def image(slide, path, left, top, width, *, height=None, border=True):
@@ -140,191 +220,258 @@ def image(slide, path, left, top, width, *, height=None, border=True):
         kwargs["height"] = Inches(height)
     picture = slide.shapes.add_picture(str(path), Inches(left), Inches(top), **kwargs)
     if border:
-        picture.line.color.rgb = LINE
-        picture.line.width = Pt(1)
+        picture.line.color.rgb = LINE_COLOR
+        picture.line.width = Pt(1.5)
     return picture
-
-
-def badge(slide, left, top, width, value, color=ACCENT):
-    rect(slide, left, top, width, 0.42, color, radius=True)
-    text(slide, left + 0.16, top + 0.1, width - 0.3, 0.3, value, 11, bold=True, font=BODY)
 
 
 def note(slide, value):
     slide.notes_slide.notes_text_frame.text = value
 
 
-def build() -> Path:
+def build(output_path: Path = OUT) -> Path:
     prs = Presentation()
     prs.slide_width = Inches(W)
     prs.slide_height = Inches(H)
 
-    # 1 ─ титул
-    slide = new_slide(prs, background=BG, footer=False)
-    rect(slide, 0, 0, 0.28, H, ACCENT)
-    text(slide, MARGIN + 0.2, 1.5, 10, 0.4, "ХАКАТОН РНД · УРОВЕНЬ MIDDLE", 12, bold=True, color=MUTED)
-    text(slide, MARGIN + 0.2, 2.1, 11, 1.6, "ОТТОК · Risk Desk", 54, bold=True, font=HEAD)
-    text(slide, MARGIN + 0.2, 3.55, 10.5, 0.9, "Кому звонить сегодня — и что ему сказать", 24, color=MUTED)
-    rect(slide, MARGIN + 0.2, 4.75, 1.4, 0.07, ACCENT)
-    text(slide, MARGIN + 0.2, 5.05, 11, 0.4,
-         "Панель маркетолога: приоритет клиентов, причины риска и деньги под угрозой", 14, color=MUTED)
-    text(slide, MARGIN + 0.2, 6.55, 11, 0.35,
-         "FastAPI · React · SQLite · один Docker-образ · 441 тест · CI", 11, color=MUTED, font=BODY)
-    note(slide, "30 секунд: кто мы, что покажем. Дальше — проблема, решение, как считаем, что уже работает.")
+    ensure_assets()
 
-    # 2 ─ проблема
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 1 ─ ТИТУЛ (24 слова | ~15-18 сек)
+    # ─────────────────────────────────────────────────────────────
+    slide = new_slide(prs, background=PANTONE_GRAY, footer=False)
+
+    rect(slide, 0, 0, 0.35, H, PANTONE_298C)
+    rect(slide, 0.35, 0, 0.08, H, PANTONE_NAVY)
+
+    if LOGO_PATH.exists():
+        image(slide, LOGO_PATH, MARGIN + 0.2, 0.8, 2.2, border=False)
+
+    text(slide, MARGIN + 0.2, 1.65, 10, 0.4, "ХАКАТОН РНД · УРОВЕНЬ MIDDLE · КЕЙС AÉZA", 13, bold=True, color=PANTONE_NAVY, font=HEAD)
+    text(slide, MARGIN + 0.2, 2.15, 11, 1.4, "ОТТОК · Risk Desk", 56, bold=True, font=HEAD, color=PANTONE_BLACK)
+    text(slide, MARGIN + 0.2, 3.6, 10.5, 0.8, "Кому звонить сегодня, почему и что сказать", 26, bold=True, color=PANTONE_NAVY, font=HEAD)
+    rect(slide, MARGIN + 0.2, 4.65, 1.8, 0.08, PANTONE_298C)
+
+    text(slide, MARGIN + 0.2, 4.95, 9.2, 0.8,
+         "Панель маркетолога облачного хостинга:\n"
+         "Анализ биллинга  →  Приоритет клиентов  →  Спасение в 1 клик",
+         17, bold=True, color=PANTONE_NAVY, font=BODY)
+
+    text(slide, MARGIN + 0.2, 6.45, 9.0, 0.4,
+         "FastAPI · React 18 · SQLite WAL · Docker Compose · 449 тестов",
+         13, bold=True, color=PANTONE_BLACK, font=HEAD)
+
+    # Мини-QR на титуле
+    rect(slide, W - MARGIN - 1.9, 4.45, 1.9, 2.4, WHITE, line=PANTONE_NAVY, radius=True)
+    image(slide, QR_PATH, W - MARGIN - 1.75, 4.6, 1.6, border=False)
+    text(slide, W - MARGIN - 1.85, 6.35, 1.8, 0.35, "GitHub проекта", 11, bold=True, align=PP_ALIGN.CENTER, color=PANTONE_NAVY, font=HEAD)
+
+    note(slide,
+         "[0:00–0:18 | 24 слова]\n\n"
+         "«Здравствуйте! Наша команда представляет Risk Desk — рабочее место маркетолога хостинга. "
+         "Мы отвечаем на три вопроса кейса: кому звонить сегодня, почему клиент уходит и сколько бизнес потеряет».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 2 ─ СПЕЦИФИКА ХОСТИНГА (42 слова | ~30-35 сек)
+    # ─────────────────────────────────────────────────────────────
     slide = new_slide(prs, number=2)
-    eyebrow(slide, "Проблема")
-    title(slide, "Данные есть, приоритета нет")
-    bullets(slide, MARGIN, 2.45, 6.6, 3.6, [
-        (0, "Маркетолог видит статусы услуг, но не знает, кто из клиентов уйдёт первым"),
-        (0, "В данных нет истории статусов и дат удаления — обучать ML не на чем"),
-        (0, "Каждое непродление — прямые деньги: в демо-снимке 67,53 € платежей под риском"),
-        (0, "Отчёт «вот таблица» не отвечает на вопрос «что делать сейчас»"),
-    ], size=16, gap=14)
-    card = rect(slide, 7.9, 2.45, 4.5, 3.35, BG, radius=True)
-    text(slide, 8.2, 2.72, 3.9, 0.35, "ДЕМО-СНИМОК, 10 КЛИЕНТОВ", 10, bold=True, color=MUTED)
-    text(slide, 8.2, 3.05, 3.9, 0.9, "67,53 €", 40, bold=True, font=HEAD)
-    text(slide, 8.2, 3.85, 3.9, 0.4, "платежей под риском", 12, color=MUTED)
-    text(slide, 8.2, 4.45, 3.9, 0.9, "3 из 10 — высокий риск\n21,56 € — ожидаемые потери", 12, color=INK)
-    note(slide, "Подчеркнуть: проблема не в отсутствии данных, а в отсутствии приоритета и действия.")
+    eyebrow(slide, "Специфика хостинга")
+    title(slide, "Удалённый сервер вернуть нельзя")
 
-    # 3 ─ решение: три вопроса
+    bullets(slide, MARGIN, 2.35, 6.4, 4.2, [
+        (0, "Сервер удалён = клиент потерян.", "Спасать нужно ДО безвозвратного удаления данных."),
+        (0, "Точки перехвата оттока:", "suspended (выключил, но платит) и prolong_wait (5 дней до удаления)."),
+        (0, "Проблема маркетолога:", "в логах тысячи строк, но нет чёткого приоритета, кому звонить первым."),
+        (0, "Наша цель:", "превратить сухие статусы в конкретные деньги и немедленное действие."),
+    ], size=17, gap=16)
+
+    c_top = 2.3
+    card_data = [
+        ("67,53 €", "платежей под угрозой на демо-снимке", PANTONE_BLACK, PANTONE_GRAY),
+        ("3 из 10", "клиентов требуют срочного внимания (Score ≥ 70)", PANTONE_ORANGE, PANTONE_GRAY),
+        ("5 дней", "окно спасения в prolong_wait до стирания сервера", PANTONE_298C, PANTONE_NAVY),
+    ]
+    for val, lbl, val_col, bg_col in card_data:
+        rect(slide, 7.8, c_top, 4.6, 1.25, bg_col, radius=True)
+        text(slide, 8.1, c_top + 0.12, 4.1, 0.65, val, 38, bold=True, color=val_col, font=HEAD)
+        text(slide, 8.1, c_top + 0.72, 4.1, 0.45, lbl, 13, bold=True, color=WHITE if bg_col == PANTONE_NAVY else PANTONE_NAVY, font=BODY)
+        c_top += 1.42
+
+    note(slide,
+         "[0:18–0:50 | 42 слова]\n\n"
+         "«В хостинге обычный биллинг не спасает: когда сервер удалён — удерживать поздно. "
+         "Отток нужно перехватывать раньше: когда услугу отключили (suspended) или она ждёт оплаты (prolong_wait). "
+         "На нашем снимке под риском 67,53 евро. Система мгновенно выявляет критических клиентов».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 3 ─ РЕШЕНИЕ: ДАШБОРД (34 слова | ~25 сек)
+    # ─────────────────────────────────────────────────────────────
     slide = new_slide(prs, number=3)
-    eyebrow(slide, "Решение")
-    title(slide, "Три вопроса — три ответа в одном экране")
+    eyebrow(slide, "Решение кейса")
+    title(slide, "Три ответа ТЗ — один рабочий экран")
+
     rows = [
-        ("01", "Кому звонить", "Рейтинг с фильтрами по уровню и срочности, сортировка и экспорт CSV"),
-        ("02", "Почему риск", "Причина одной фразой, раскрываемые факты, вклад каждого признака"),
-        ("03", "Сколько теряем", "Деньги по ближайшим платежам и готовое письмо клиенту"),
+        ("01", "Кому звонить:", "Рейтинг по Risk Score и срочности (до 7 дней). Сортировка и экспорт CSV."),
+        ("02", "Почему уходит:", "Причина человеческим языком: «На продление нужно 5,50 €, на балансе 3,00 €»."),
+        ("03", "Сколько теряем:", "Точная денежная оценка по ближайшим платежам за услуги с учётом баланса."),
     ]
     top = 2.35
     for number, head, body in rows:
-        text(slide, MARGIN, top, 0.8, 0.5, number, 22, bold=True, color=ACCENT, font=HEAD)
-        text(slide, MARGIN + 0.85, top - 0.03, 3.3, 0.4, head, 17, bold=True, font=HEAD)
-        text(slide, MARGIN + 0.85, top + 0.4, 4.6, 0.7, body, 12, color=MUTED)
-        top += 1.35
-    image(slide, SHOTS / "02-overview-1440.png", 6.55, 2.15, 5.85)
-    note(slide, "Один экран закрывает все три вопроса кейса. Показать, что это не набор графиков, а маршрут к действию.")
+        text(slide, MARGIN, top, 0.85, 0.45, number, 26, bold=True, color=PANTONE_298C, font=HEAD)
+        text(slide, MARGIN + 0.9, top - 0.02, 4.5, 0.38, head, 19, bold=True, color=PANTONE_BLACK, font=HEAD)
+        text(slide, MARGIN + 0.9, top + 0.4, 4.5, 0.8, body, 14, color=PANTONE_NAVY, font=BODY)
+        top += 1.4
 
-    # 4 ─ модель
+    # Крупный чёткий скриншот дашборда справа (1440x920 viewport)
+    if DASH_CROP_PATH.exists():
+        image(slide, DASH_CROP_PATH, 6.35, 2.25, 6.15, border=True)
+
+    note(slide,
+         "[0:50–1:15 | 34 слова]\n\n"
+         "«Мы объединили все три ответа кейса на одном экране дашборда:\n"
+         "Первое — рейтинг клиентов по уровню риска и срочности продления.\n"
+         "Второе — понятная причина фразой, а не абстрактная цифра.\n"
+         "Третье — точная денежная оценка по ближайшим платежам».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 4 ─ ДЕЙСТВИЕ: ПИСЬМО В 1 КЛИК (32 слова | ~25 сек)
+    # ─────────────────────────────────────────────────────────────
     slide = new_slide(prs, number=4)
-    eyebrow(slide, "Модель")
+    eyebrow(slide, "Действие и retention")
+    title(slide, "От анализа к действию: удержание в 1 клик")
+
+    bullets(slide, MARGIN, 2.35, 6.4, 4.2, [
+        (0, "Маркетолог не тратит время на рутину:", "система сама формирует контекст обращения."),
+        (0, "7 готовых сценариев удержания:", "от нехватки денег до зависшей оплаты и блокировки."),
+        (0, "Умная автоподстановка:", "в письмо подставляются имя, название сервера, сумма доплаты и промокод."),
+        (0, "Мгновенное действие:", "копирование текста в один клик или прямая ссылка mailto: для отправки."),
+    ], size=17, gap=16)
+
+    # Крупное диалоговое окно письма справа
+    if EMAIL_CROP_PATH.exists():
+        image(slide, EMAIL_CROP_PATH, 7.85, 2.2, 4.6, border=True)
+
+    note(slide,
+         "[1:15–1:40 | 32 слова]\n\n"
+         "«Главное — аналитика сразу переходит в действие. По клику на клиента открывается персонализированный драфт письма: "
+         "система сама подставляет услугу, сумму к доплате и промокод. Маркетолог удерживает клиента в один клик».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 5 ─ МЕТОДОЛОГИЯ И ЧЕСТНОСТЬ (44 слова | ~30-35 сек)
+    # ─────────────────────────────────────────────────────────────
+    slide = new_slide(prs, number=5)
+    eyebrow(slide, "Методология и честность")
     title(slide, "Прозрачные правила вместо чёрного ящика")
-    text(slide, MARGIN, 2.3, 6.4, 0.35, "СЕМЬ ПРИЗНАКОВ И ВЕСА (МЕНЯЮТСЯ В ПАНЕЛИ)", 10, bold=True, color=MUTED)
+
+    text(slide, MARGIN, 2.25, 6.0, 0.35, "7 ПРИЗНАКОВ И ВЕСА (НАСТРАИВАЮТСЯ В ПАНЕЛИ БЕЗ КОДА)", 11, bold=True, color=PANTONE_NAVY, font=HEAD)
     weights = [
-        ("Срочность продления", "0,40"), ("Нехватка денег", "0,25"),
-        ("Автопродление off", "0,10"), ("Статус услуги", "0,10"),
-        ("История неоплат", "0,10"), ("Лояльность", "0,05"),
+        ("Срочность продления", "0,40"), ("Нехватка баланса", "0,25"),
+        ("Автопродление OFF", "0,10"), ("Статус prolong / susp", "0,10"),
+        ("История неоплат", "0,10"), ("Лояльность / стаж", "0,05"),
     ]
     left, top = MARGIN, 2.65
     for index, (name, weight) in enumerate(weights):
         column, row = index % 2, index // 2
-        x = left + column * 3.25
-        y = top + row * 0.62
-        text(slide, x, y, 2.45, 0.3, name, 12, color=INK)
-        text(slide, x + 2.45, y, 0.6, 0.3, weight, 12, bold=True, color=MUTED, align=PP_ALIGN.RIGHT)
-        rect(slide, x, y + 0.42, 3.05, 0.01, LINE)
-    text(slide, MARGIN, 4.5, 6.2, 0.4, "+ новый признак: доля услуг без автопродления, вес 0,00 — прежние оценки не меняются", 10.5, color=MUTED)
-    text(slide, MARGIN, 4.95, 6.2, 0.9, "Score 0–100 · уровни 40/70 · prolong_wait и устаревшие статусы\nполучают минимум 70, blocked — 60", 11, color=MUTED)
-    box = rect(slide, 7.35, 2.35, 5.05, 3.9, BG, radius=True)
-    text(slide, 7.65, 2.6, 4.5, 0.35, "ДЕНЬГИ", 10, bold=True, color=MUTED)
-    text(slide, 7.65, 3.0, 4.5, 0.6, "P(score) × price × (1 − 0,5 × покрытие)", 15, bold=True, font=HEAD)
-    text(slide, 7.65, 3.7, 4.45, 2.4,
-         "Считаем от ближайшего платежа, а не от суммы транзакции. "
-         "Баланс снижает потерю максимум наполовину: деньги отложены, но клиент всё равно может уйти.\n\n"
-         "Пример: 5,50 € через 2 дня, баланс 3,00 € → score 89, ожидаемые потери 6,44 €.",
-         11.5, color=INK, line_spacing=1.3)
-    note(slide, "Ключевая мысль: решение объяснимо и настраивается без кода. Формула денег — на слайде, чтобы не выглядеть магией.")
+        x = left + column * 3.1
+        y = top + row * 0.65
+        text(slide, x, y, 2.3, 0.35, name, 13, bold=True, color=PANTONE_BLACK, font=HEAD)
+        text(slide, x + 2.3, y, 0.6, 0.35, weight, 14, bold=True, color=PANTONE_NAVY, align=PP_ALIGN.RIGHT, font=HEAD)
+        rect(slide, x, y + 0.42, 2.9, 0.015, LINE_COLOR)
 
-    # 5 ─ честность
-    slide = new_slide(prs, number=5)
-    eyebrow(slide, "Честность")
-    title(slide, "Почему не ML — и почему это сильная сторона")
-    bullets(slide, MARGIN, 2.4, 6.3, 3.9, [
-        (0, "В данных нет меток «ушёл / остался» и истории статусов"),
-        (1, "обучать не на чем: 10 записей дадут подгонку, а не прогноз"),
-        (0, "Score — экспертная шкала, а не статистическая вероятность"),
-        (1, "P(score) — соглашение, оно подписано и в интерфейсе, и в API"),
-        (0, "Зато причины видно, веса можно оспорить и изменить в панели"),
-        (0, "Когда появятся исходы, шкала калибруется — архитектура не меняется"),
-    ], size=15, gap=11)
-    rect(slide, 7.7, 2.4, 4.7, 3.6, ACCENT, radius=True)
-    text(slide, 8.0, 2.8, 4.1, 0.4, "ЧЕГО МЫ НЕ ДЕЛАЕМ", 10, bold=True, color=INK)
-    bullets(slide, 8.0, 3.2, 4.1, 2.5, [
-        (0, "не обещаем точность прогноза"),
-        (0, "не называем деньги гарантированным убытком"),
-        (0, "не показываем тренды, которых нет в данных"),
-    ], size=13, gap=10)
-    note(slide, "Это любимый вопрос жюри. Отвечаем прямо: данных для ML нет, и мы не притворяемся.")
+    rect(slide, MARGIN, 4.7, 5.8, 1.85, PANTONE_GRAY, radius=True)
+    text(slide, MARGIN + 0.25, 4.85, 5.3, 0.3, "РАСЧЁТ ДЕНЕГ ПОД РИСКОМ", 11, bold=True, color=PANTONE_NAVY, font=HEAD)
+    text(slide, MARGIN + 0.25, 5.2, 5.3, 0.45, "Потери = P(score) × price × (1 − 0,5 × баланс)", 16, bold=True, font=HEAD, color=PANTONE_BLACK)
+    text(slide, MARGIN + 0.25, 5.7, 5.3, 0.75,
+         "Считаем от цены продления услуги (price), а не из случайных сумм транзакций. "
+         "Баланс гасит риск максимум наполовину: деньги есть, но сервер могут не продлить.", 12, color=PANTONE_NAVY, font=BODY)
 
-    # 6 ─ действие
+    rect(slide, 7.3, 2.25, 5.1, 4.3, PANTONE_NAVY, radius=True)
+    text(slide, 7.6, 2.55, 4.5, 0.45, "ПОЧЕМУ НЕ ML?", 22, bold=True, color=PANTONE_298C, font=HEAD)
+    bullets(slide, 7.6, 3.1, 4.5, 3.2, [
+        (0, "0 меток оттока и 0 истории:", "в данных нет исходов — обучать ML не на чем."),
+        (0, "ML на 10 строках — самообман:", "модель просто заучит шум и выдаст ложные цифры."),
+        (0, "Полная прозрачность:", "маркетолог понимает каждый балл и меняет веса в UI."),
+        (0, "Калибровка без смены кода:", "появится история — модель откалибруется моментально."),
+    ], size=13, gap=10, color=WHITE)
+
+    note(slide,
+         "[1:40–2:10 | 44 слова]\n\n"
+         "«Почему не машинное обучение? В исходных данных нет истории и меток оттока. Обучать ML на десяти строках — это самообман.\n"
+         "Мы применили прозрачную модель из семи признаков. Маркетолог может сам менять их веса в интерфейсе, а потери считаются от реального платежа за услугу».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 6 ─ ИНЖЕНЕРИЯ И ПРОД-ГОТОВНОСТЬ (35 слов | ~25-30 сек)
+    # ─────────────────────────────────────────────────────────────
     slide = new_slide(prs, number=6)
-    eyebrow(slide, "Действие")
-    title(slide, "Из анализа — в письмо клиенту")
-    bullets(slide, MARGIN, 2.35, 4.45, 3.9, [
-        (0, "Черновик письма под 7 ситуаций — от нехватки денег до блокировки"),
-        (0, "Суммы, сроки и услуга подставляются из расчёта"),
-        (0, "Копирование и mailto: — отправляет маркетолог"),
-        (0, "Веса меняются без перезагрузки, метрики сходятся с UI"),
-    ], size=14, gap=12)
-    image(slide, SHOTS / "04-customer-card.png", 5.55, 1.95, 3.3)
-    image(slide, SHOTS / "10-email-dialog.png", 9.0, 2.35, 3.3)
-    note(slide, "Показать живой путь: клиент 6 → причина → письмо. Это то, чего нет у типичного дашборда.")
+    eyebrow(slide, "Инженерия и прод-готовность")
+    title(slide, "Готов к бою: одна команда запуска и 449 тестов")
 
-    # 7 ─ прогноз
-    slide = new_slide(prs, number=7)
-    eyebrow(slide, "Прогноз")
-    title(slide, "Когда наступит отток: факт и прогноз разделены")
-    image(slide, SHOTS / "12-forecast.png", MARGIN, 2.3, 8.3)
-    bullets(slide, 9.55, 2.35, 3.1, 3.8, [
-        (0, "Слева — факт по снимку: срок истёк, услуга не продлена"),
-        (0, "Справа — прогноз: срок истекает, вероятность взята из score"),
-        (0, "Исторических удалений нет: в данных нет даты удаления — говорим прямо"),
-    ], size=12, gap=12)
-    note(slide, "Бонусный пункт кейса: график оттока. Показать, что факт и прогноз не смешаны, и честно сказать про отсутствие дат удаления.")
-
-    # 8 ─ прод-готовность
-    slide = new_slide(prs, number=8)
-    eyebrow(slide, "Инженерия")
-    title(slide, "Одна команда — и проверки машиной")
     cards = [
-        ("1 команда", "docker compose up --build\n12 секунд до healthz"),
-        ("441 тест", "backend + генератор данных\n9 e2e в браузере"),
-        ("CI", "pytest, сборка, OpenAPI,\ncompose и docker build"),
-        ("SSO", "OIDC + PKCE, Keycloak\nв отдельном оверлее"),
+        ("1 команда", "docker compose up\nготов за секунды", PANTONE_298C),
+        ("449 тестов", "backend + Playwright e2e\n100% зелёный CI", PANTONE_BLACK),
+        ("3,1 сек", "на 10 000 клиентов\np95 чтения 24 мс", PANTONE_BLACK),
+        ("Enterprise", "Prometheus /metrics\nSwagger + Keycloak SSO", PANTONE_NAVY),
     ]
-    for index, (head, body) in enumerate(cards):
+    for index, (head, body, col) in enumerate(cards):
         x = MARGIN + index * 2.92
-        rect(slide, x, 2.45, 2.62, 1.55, BG, radius=True)
-        text(slide, x + 0.2, 2.65, 2.35, 0.4, head, 20, bold=True, font=HEAD)
-        text(slide, x + 0.2, 3.15, 2.35, 0.75, body, 10.5, color=MUTED)
-    bullets(slide, MARGIN, 4.35, 6.4, 2.3, [
-        (0, "10 000 клиентов: пересчёт 3,1 с, список p95 24 мс"),
-        (0, "Prometheus /metrics и Swagger /api/v1/docs"),
-        (0, "Настройки и снимок переживают перезапуск"),
+        rect(slide, x, 2.3, 2.65, 1.55, PANTONE_GRAY, radius=True)
+        text(slide, x + 0.2, 2.45, 2.35, 0.45, head, 22, bold=True, color=col, font=HEAD)
+        text(slide, x + 0.2, 3.0, 2.35, 0.75, body, 12, bold=True, color=PANTONE_NAVY, font=BODY)
+
+    bullets(slide, MARGIN, 4.15, 6.6, 2.6, [
+        (0, "Воспроизводимость:", "жюри разворачивает стенд одной строкой из docs/JURY.md."),
+        (0, "SQLite WAL:", "высокая скорость, устойчивость к сбоям, данные сохраняются."),
+        (0, "Реальное время:", "SSE-стриминг мгновенно обновляет дашборд при смене данных."),
+        (0, "Безопасность:", "сессии HttpOnly, защита от перебора PBKDF2, OIDC с PKCE."),
     ], size=14, gap=10)
-    image(slide, SHOTS / "11-login-sso.png", 8.2, 4.15, 4.05)
-    note(slide, "Здесь добиваем инженерные критерии: Docker, тесты, метрики, auth, документация.")
 
-    # 9 ─ ограничения и финал
-    slide = new_slide(prs, number=9, background=BG)
-    eyebrow(slide, "Границы и следующий шаг")
-    title(slide, "Что мы знаем про свои ограничения")
-    bullets(slide, MARGIN, 2.4, 5.9, 3.9, [
-        (0, "10 клиентов в демо-данных — для «топ-клиентов» мало"),
-        (0, "Нет истории статусов: прогноза оттока во времени нет"),
-        (0, "Деньги — оценка ближайших платежей, не месячная выручка"),
-        (0, "Дальше: накопление снапшотов, калибровка на исходах, Grafana"),
-    ], size=15, gap=13)
-    rect(slide, 7.0, 2.4, 5.4, 3.6, ACCENT, radius=True)
-    text(slide, 7.35, 2.75, 4.75, 1.2, "Риск превращается\nв действие", 30, bold=True, font=HEAD)
-    text(slide, 7.35, 4.15, 4.75, 1.4,
-         "Репозиторий и инструкция для запуска\nв docs/JURY.md — три минуты до панели.", 12, color=INK)
-    note(slide, "Финал: честно про ограничения и одна фраза-позиционирование. Дальше вопросы.")
+    image(slide, SHOTS / "11-login-sso.png", 8.0, 4.1, 4.3)
 
-    prs.save(OUT)
-    return OUT
+    note(slide,
+         "[2:10–2:35 | 35 слов]\n\n"
+         "«Сервис полностью готов. Вы можете развернуть и проверить его прямо сейчас одной командой docker compose up. "
+         "В проекте 449 бэкенд-тестов и браузерные E2E тесты. База данных оптимизирована под 10 000 клиентов, подключены Swagger, Prometheus и корпоративный SSO».")
+
+    # ─────────────────────────────────────────────────────────────
+    # СЛАЙД 7 ─ ФИНАЛ И ПРИГЛАШЕНИЕ К Q&A (18 слов | ~15 сек)
+    # ─────────────────────────────────────────────────────────────
+    slide = new_slide(prs, number=7, background=PANTONE_GRAY)
+    eyebrow(slide, "Итог и проверка")
+    title(slide, "ОТТОК · Risk Desk")
+
+    rect(slide, MARGIN, 2.25, 5.9, 4.4, WHITE, line=PANTONE_NAVY, radius=True)
+    text(slide, MARGIN + 0.4, 2.5, 5.1, 0.4, "РЕЗУЛЬТАТ", 14, bold=True, color=PANTONE_NAVY, font=HEAD)
+    bullets(slide, MARGIN + 0.4, 3.0, 5.1, 3.4, [
+        (0, "100% покрытие ТЗ:", "все три вопроса кейса закрыты в одном окне."),
+        (0, "Retention в 1 клик:", "персональный драфт письма клиенту с промокодом."),
+        (0, "Прогноз оттока во времени:", "факт просрочек и прогноз на 30 дней с CSV."),
+        (0, "449 автотестов:", "гарантия надёжности математики и API контрактов."),
+        (0, "Готов к интеграции:", "Swagger, Prometheus и Keycloak SSO из коробки."),
+    ], size=14, gap=11)
+
+    rect(slide, 7.3, 2.25, 5.1, 4.4, PANTONE_NAVY, radius=True)
+    text(slide, 7.6, 2.5, 4.5, 0.45, "ГОТОВЫ К ВОПРОСАМ", 22, bold=True, color=PANTONE_298C, font=HEAD)
+    text(slide, 7.6, 2.95, 4.5, 0.35, "Прямая ссылка на GitHub (код, тесты, docs/JURY.md):", 11, color=WHITE, font=BODY)
+
+    rect(slide, 7.6, 3.4, 2.3, 2.3, WHITE, radius=True)
+    image(slide, QR_PATH, 7.7, 3.5, 2.1, border=False)
+
+    text(slide, 10.1, 3.45, 2.1, 2.2,
+         "СКАН ДЛЯ ЖЮРИ:\n\n"
+         "docker compose up\n\n"
+         "Swagger API:\n/api/v1/docs\n\n"
+         "Prometheus:\n/metrics\n\n"
+         "Вход: admin / admin",
+         10.5, bold=True, color=WHITE, font=HEAD, line_spacing=1.15)
+
+    text(slide, 7.6, 5.9, 4.5, 0.4, "github.com/Demtory/Hack23.10.26", 12, bold=True, color=PANTONE_298C, font=HEAD)
+
+    note(slide,
+         "[2:35–2:50 | 18 слов]\n\n"
+         "«Инструкция по запуску — в файле JURY.md. Спасибо за внимание, мы готовы ответить на вопросы и показать работу системы».")
+
+    prs.save(output_path)
+    return output_path
 
 
 if __name__ == "__main__":
@@ -332,5 +479,5 @@ if __name__ == "__main__":
     from pptx import Presentation as P
 
     deck = P(str(path))
-    print(f"готово: {path}")
-    print(f"слайдов: {len(deck.slides)}")
+    print(f"Презентация успешно сгенерирована: {path}")
+    print(f"Количество слайдов: {len(deck.slides)}")

@@ -9,7 +9,6 @@ from typing import Any
 from .custom_factors import definitions, evaluate
 from .messages import build_customer_messages, money_text
 
-# Aéza - это быстрый хостинг
 DEFAULT_SETTINGS: dict[str, Any] = {
     "weights": {
         "expiry_pressure": 0.40,

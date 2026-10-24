@@ -102,8 +102,9 @@ class SnapshotIn(APIModel):
 
 class SourceEventIn(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    action: Literal['autoprolong_off', 'topup_20', 'suspend_server']
+    action: Literal['autoprolong_off', 'autoprolong_on', 'topup_20', 'deduct_20', 'suspend_server', 'activate_server']
     expected_run_id: int = Field(strict=True, ge=1, alias='expectedRunId')
+    customer_id: int | None = Field(default=6, ge=1, alias='customerId')
 
 
 class LoginIn(BaseModel):

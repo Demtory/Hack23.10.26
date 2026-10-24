@@ -32,7 +32,7 @@ export const api={
  source:()=>request<Snapshot>('/api/v1/source/snapshot'),
  sourceText:async()=>{const r=await requestResponse('/api/v1/source/snapshot');return r.text();},
  sourceView:async()=>{const r=await requestResponse('/api/v1/source/snapshot');return{text:await r.text(),asOf:r.headers.get('X-Calculation-As-Of'),updatedAt:r.headers.get('X-Calculation-Updated-At'),runId:Number(r.headers.get('X-Calculation-Run-Id'))};},
- sourceEvent:(action:string,expectedRunId:number)=>request<{summary:Summary}>('/api/v1/source/events',{method:'POST',body:JSON.stringify({action,expectedRunId})}),
+ sourceEvent:(action:string,expectedRunId:number,customerId?:number)=>request<{summary:Summary}>('/api/v1/source/events',{method:'POST',body:JSON.stringify({action,expectedRunId,customerId})}),
  replaceSourceText:(text:string)=>request<{counts:Record<string,number>;summary:Summary}>('/api/v1/source/snapshot',{method:'PUT',body:text}),
  replaceSource:(snapshot:Snapshot)=>request<{counts:Record<string,number>;summary:Summary}>('/api/v1/source/snapshot',{method:'PUT',body:JSON.stringify(snapshot)}),
  export:async(q:CustomerQuery,runId:number)=>{const p=params(q);p.delete('page');p.delete('pageSize');p.set('runId',String(runId));const r=await requestResponse('/api/v1/customers/export.csv?'+p);return{blob:await r.blob(),filename:`customers-run-${runId}.csv`};},

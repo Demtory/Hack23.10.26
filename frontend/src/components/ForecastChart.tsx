@@ -103,7 +103,7 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     ));
   }, [data]);
 
-  if (!data) return <section className="card"><h2>Прогноз продлений</h2>{loadError?<ErrorBox message={loadError} onRetry={()=>setRetry(x=>x+1)}/>:<Spinner label="Загружаем прогноз"/>}</section>;
+  if (!data) return loadError ? <section className="card"><h2>Прогноз продлений</h2><ErrorBox message={loadError} onRetry={()=>setRetry(x=>x+1)}/></section> : null;
 
   const height = (value: number) => (value ? `${(value / peak) * 100}%` : "0%");
   const isActive = (date: string, kind: Kind) => selected?.date === date && selected?.kind === kind;

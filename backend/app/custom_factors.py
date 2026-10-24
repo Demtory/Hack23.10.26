@@ -49,10 +49,19 @@ def metadata(settings):
 
 
 def evaluate(rule, service, account, now: datetime):
-    values = {'price':service['price']/100, 'balance':account['balance']/100,
-              'totalReplenished':account['total_replenished']/100,
-              'autoProlong':bool(service['auto_prolong']), 'status':service['status'],
-              'daysToExpiry':(datetime.fromisoformat(service['expires_at'].replace('Z','+00:00'))-now).total_seconds()/86400}
+    raw_expires = service.get('expires_at')
+    if raw_expires:
+        days_to_expiry = (datetime.fromisoformat(raw_expires.replace('Z', '+00:00')) - now).total_seconds() / 86400
+    else:
+        days_to_expiry = 0.0
+    values = {
+        'price': service['price'] / 100,
+        'balance': account['balance'] / 100,
+        'totalReplenished': account['total_replenished'] / 100,
+        'autoProlong': bool(service['auto_prolong']),
+        'status': service['status'],
+        'daysToExpiry': days_to_expiry,
+    }
     actual, target = values[rule['field']], rule['value']
     matched = {'lt':lambda:actual<target, 'lte':lambda:actual<=target, 'eq':lambda:actual==target,
                'gte':lambda:actual>=target, 'gt':lambda:actual>target}[rule['operator']]()

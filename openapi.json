@@ -2673,8 +2673,11 @@
             "type": "string",
             "enum": [
               "autoprolong_off",
+              "autoprolong_on",
               "topup_20",
-              "suspend_server"
+              "deduct_20",
+              "suspend_server",
+              "activate_server"
             ],
             "title": "Action"
           },
@@ -2682,6 +2685,19 @@
             "type": "integer",
             "minimum": 1.0,
             "title": "Expectedrunid"
+          },
+          "customerId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customerid",
+            "default": 6
           }
         },
         "additionalProperties": false,

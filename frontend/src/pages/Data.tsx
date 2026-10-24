@@ -13,6 +13,7 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number>(6);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,20 +70,28 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
     }
   }
 
-  async function simulateEvent(action: 'autoprolong_off' | 'topup_20' | 'suspend_server') {
+  async function simulateEvent(action: 'autoprolong_off' | 'autoprolong_on' | 'topup_20' | 'deduct_20' | 'suspend_server' | 'activate_server', customerId: number = selectedCustomerId) {
     if (!snapshot || busy) return;
     setBusy(true);
     setError(null);
     setStatus(null);
     try {
-      const res = await api.sourceEvent(action, Number((context as {runId?:number}|null)?.runId));
+      const res = await api.sourceEvent(action, Number((context as {runId?:number}|null)?.runId), customerId);
       const saved = await api.sourceView();
       setSnapshot(JSON.parse(saved.text) as Snapshot);
       setSnapshotText(saved.text);
       setContext(saved);
       setSummary(saved.runId === res.summary.calculation?.runId ? res.summary : null);
       onSnapshotUploaded?.();
-      setStatus("Событие применено к клиенту ID 6. Оценки пересчитаны по новым данным.");
+      const actionLabels: Record<string, string> = {
+        autoprolong_off: 'отключено автопродление',
+        autoprolong_on: 'включено автопродление',
+        topup_20: 'добавлено +20 € на баланс',
+        deduct_20: 'списано -20 € с баланса',
+        suspend_server: 'услуга переведена в suspended',
+        activate_server: 'услуга активирована (active)',
+      };
+      setStatus(`Событие применено к клиенту ID ${customerId}: ${actionLabels[action] || action}. Оценки пересчитаны.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Не удалось выполнить симуляцию');
     } finally {
@@ -215,17 +224,42 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
             </div>
           </div>
           <p className="muted">
-            Кнопки изменяют данные клиента ID 6 и запускают пересчёт. Используйте на демонстрационном снимке. Подключение к реальному биллингу эти кнопки не заменяют.
+            Выберите клиента и смоделируйте событие биллинга. Изменения применятся к снимку, запустят пересчёт и моментально обновят дашборд маркетолога.
           </p>
-          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginTop:'14px'}}>
+          <div style={{display:'flex',gap:'14px',alignItems:'flex-end',flexWrap:'wrap',marginTop:'14px',marginBottom:'14px'}}>
+            <label className="field" style={{margin:0, minWidth:'300px'}}>
+              <span>Клиент для симуляции</span>
+              <select
+                value={selectedCustomerId}
+                onChange={e => setSelectedCustomerId(Number(e.target.value))}
+                disabled={busy || !snapshot}
+              >
+                {(snapshot?.accounts as Array<{ id: number; email: string; balance: number }>)?.map(a => (
+                  <option key={a.id} value={a.id}>
+                    ID {a.id} — {a.email} (баланс: {(a.balance / 100).toFixed(2)} €)
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('autoprolong_off')}>
-              Отключить автопродление (клиент ID 6)
+              Отключить автопродление
+            </button>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('autoprolong_on')}>
+              Включить автопродление
             </button>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('topup_20')}>
-              Добавить 20 € на баланс (клиент ID 6)
+              Добавить 20 € на баланс
+            </button>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('deduct_20')}>
+              Убрать 20 € с баланса
             </button>
             <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('suspend_server')}>
-              Отметить услугу выключенной (клиент ID 6)
+              Отметить выключенной (suspended)
+            </button>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('activate_server')}>
+              Активировать услугу (active)
             </button>
           </div>
         </section>
