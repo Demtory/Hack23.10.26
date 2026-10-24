@@ -76,3 +76,49 @@ docker compose up --build -d     # пересобрать и перезапус�
 - Один человек в день отвечает за мерж PR и за то, что `main` зелёный.
 - Коммиты и PR — короткие: одна задача, одно изменение.
 - Перед защитой: `main` заморожен, все работают только ветками и PR.
+
+## 7. Для владельца репозитория
+
+Эти шаги требуют прав **admin**. Сейчас в репозитории три участника
+(`Demtory`, `ilemss`, `surgezxc`); добавлять новых и менять правила может владелец.
+
+### Добавить участника
+
+```bash
+gh api -X PUT repos/Demtory/Hack23.10.26/collaborators/USERNAME -f permission=push
+```
+
+Или: Settings → Collaborators → Add people.
+
+### Включить защиту `main` (PR + зелёный CI)
+
+Файл `protection.json`:
+
+```json
+{
+  "required_status_checks": { "strict": true, "contexts": ["backend", "frontend", "compose"] },
+  "enforce_admins": false,
+  "required_pull_request_reviews": { "required_approving_review_count": 1 },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+```
+
+```bash
+gh api -X PUT repos/Demtory/Hack23.10.26/branches/main/protection \
+  -H "Accept: application/vnd.github+json" --input protection.json
+```
+
+Проверить:
+
+```bash
+gh api repos/Demtory/Hack23.10.26/branches/main/protection --jq '.required_status_checks.contexts'
+```
+
+Если GitHub ответит, что для приватного репозитория нужен платный план — включите
+то же самое через **Settings → Rules → New ruleset**: target `main`, «Require a pull
+request before merging», «Require status checks» (`backend`, `frontend`, `compose`).
+
+`enforce_admins: false` оставляет владельцу аварийный прямой пуш — на хакатоне это
+полезно, но не злоупотребляйте: остальные участники работают только через PR.
