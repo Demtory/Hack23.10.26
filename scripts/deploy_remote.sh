@@ -4,6 +4,7 @@
 #   ./scripts/deploy_remote.sh                    # на стенд по умолчанию
 #   ./scripts/deploy_remote.sh root@1.2.3.4       # другой сервер
 #   SSH_KEY=~/.ssh/other ./scripts/deploy_remote.sh
+#   SSO=1 ./scripts/deploy_remote.sh               # вместе с Keycloak
 #
 # Пароли и .env живут только на сервере и в git не попадают.
 set -euo pipefail
@@ -21,5 +22,11 @@ rsync -az --delete \
   -e "ssh -i $KEY -o StrictHostKeyChecking=no" \
   "$ROOT/" "$HOST:$TARGET/"
 
-ssh -i "$KEY" -o StrictHostKeyChecking=no "$HOST" "cd $TARGET && docker compose up -d --build && docker compose ps --format '{{.Service}} {{.Status}}'"
+FILES=(-f compose.yaml)
+if [ "${SSO:-0}" = "1" ]; then
+  FILES+=(-f compose.sso.yaml)
+fi
+COMPOSE_ARGS="${FILES[*]}"
+
+ssh -i "$KEY" -o StrictHostKeyChecking=no "$HOST" "cd $TARGET && docker compose $COMPOSE_ARGS up -d --build && docker compose $COMPOSE_ARGS ps --format '{{.Service}} {{.Status}}'"
 echo "Готово. Проверка: curl -s http://${HOST#*@}:8000/healthz"

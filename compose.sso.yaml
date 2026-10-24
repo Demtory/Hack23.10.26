@@ -1,17 +1,19 @@
 name: risk-desk
 
-# Демо с SSO: docker compose -f compose.yaml -f compose.sso.yaml up --build
-# Поднимает Keycloak с готовым realm и включает OIDC в приложении.
-# Логин в панель: marketer@example.test / marketer123 (через кнопку SSO)
-# Консоль Keycloak: http://localhost:8081 (admin / admin)
+# Демо с SSO:
+#   локально: docker compose -f compose.yaml -f compose.sso.yaml up --build
+#   на сервере: OIDC_PUBLIC_BASE=http://<ip>:8081 APP_PUBLIC_BASE=http://<ip>:8000 \
+#               docker compose -f compose.yaml -f compose.sso.yaml up -d --build
+# Логин в панель: marketer@example.test / marketer123 (кнопка SSO)
+# Консоль Keycloak: <OIDC_PUBLIC_BASE> (admin / KC_ADMIN_PASSWORD)
 
 services:
   app:
     environment:
-      OIDC_ISSUER: http://localhost:8081/realms/risk-desk
+      OIDC_ISSUER: ${OIDC_PUBLIC_BASE:-http://localhost:8081}/realms/risk-desk
       OIDC_CLIENT_ID: risk-desk
-      OIDC_CLIENT_SECRET: dev-secret-risk-desk
-      OIDC_REDIRECT_URI: http://localhost:8000/api/v1/auth/oidc/callback
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-dev-secret-risk-desk}
+      OIDC_REDIRECT_URI: ${APP_PUBLIC_BASE:-http://localhost:8000}/api/v1/auth/oidc/callback
       OIDC_INTERNAL_BASE: http://keycloak:8080/realms/risk-desk
       OIDC_PROVIDER_NAME: Keycloak
     depends_on:
@@ -23,8 +25,8 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: http://localhost:8081
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: ${OIDC_PUBLIC_BASE:-http://localhost:8081}
       KC_HTTP_ENABLED: "true"
     ports:
       - "${KC_PORT:-8081}:8080"
