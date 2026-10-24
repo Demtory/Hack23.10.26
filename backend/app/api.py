@@ -323,7 +323,13 @@ def _selection(run, level, q, urgency):
     if level:
         where.append('cs.level = ?'); params.append(level)
     if q:
-        where.append('lower(a.email) LIKE ?'); params.append(f'%{q.lower()}%')
+        query = q.strip()
+        like = f'%{query.lower()}%'
+        if query.isdigit():
+            # Число ищет и по email, и по точному ID клиента.
+            where.append('(lower(a.email) LIKE ? OR a.id = ?)'); params.extend([like, int(query)])
+        else:
+            where.append('lower(a.email) LIKE ?'); params.append(like)
     if urgency != 'all':
         as_of = datetime.fromisoformat(json.loads(run['summary'])['asOf'].replace('Z', '+00:00'))
         iso = lambda dt: dt.astimezone(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')

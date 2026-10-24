@@ -70,3 +70,22 @@ def test_exact_threshold_boundaries(client,full_snapshot):
     assert result.status_code==200
     items=client.get('/api/v1/customers').json()['items']
     assert [(x['score'],x['level'],x['servicesAtRisk']) for x in sorted(items,key=lambda x:x['id'])]==[(80,'medium',1),(90,'high',1),(None,'unknown',0)]
+
+
+def test_numeric_search_matches_id_even_when_email_has_no_digits(client, full_snapshot):
+    login(client)
+    snapshot = copy.deepcopy(full_snapshot)
+    for account in snapshot['accounts']:
+        if account['id'] == 6:
+            account['email'] = 'no-digits@example.test'
+    assert client.put('/api/v1/source/snapshot', json=snapshot).status_code == 200
+
+    by_id = client.get('/api/v1/customers', params={'q': '6'}).json()
+    assert [item['id'] for item in by_id['items']] == [6]
+    assert by_id['total'] == 1
+
+    by_email = client.get('/api/v1/customers', params={'q': 'no-digits'}).json()
+    assert [item['id'] for item in by_email['items']] == [6]
+
+    # ID ищется точно: подстрока не должна цеплять 16 или 60.
+    assert client.get('/api/v1/customers', params={'q': '16'}).json()['total'] == 0
