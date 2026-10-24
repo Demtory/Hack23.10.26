@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
+import { downloadBlob } from "../download";
 import type { Forecast, ForecastDay } from "../types";
 import { money, shortDate } from "./ui";
 
@@ -44,6 +45,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
   const [dayError, setDayError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exported, setExported] = useState<{ url: string; name: string } | null>(null);
+  const exportUrl = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -82,6 +85,13 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
     };
   }, [selected]);
 
+  useEffect(
+    () => () => {
+      if (exportUrl.current) URL.revokeObjectURL(exportUrl.current);
+    },
+    [],
+  );
+
   const peak = useMemo(() => {
     if (!data) return 1;
     return Math.max(
@@ -98,14 +108,14 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
   const download = async () => {
     setExporting(true);
     setExportError(null);
+    if (exportUrl.current) URL.revokeObjectURL(exportUrl.current);
+    exportUrl.current = null;
+    setExported(null);
     try {
       const result = await api.forecastExport("all");
-      const url = URL.createObjectURL(result.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = result.filename;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const url = downloadBlob(result.blob, result.filename);
+      exportUrl.current = url;
+      setExported({ url, name: result.filename });
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Не удалось скачать CSV");
     } finally {
@@ -136,6 +146,15 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
       </div>
 
       {exportError ? <p className="form-error">{exportError}</p> : null}
+      {exported ? (
+        <p className="forecast__exported" role="status">
+          Файл скачан: {exported.name}. Если он не появился —{" "}
+          <a href={exported.url} download={exported.name}>
+            скачайте ссылкой
+          </a>
+          .
+        </p>
+      ) : null}
 
       <div className="forecast__legend">
         <span className="forecast__key forecast__key--fact">Факт: срок истёк, услуга не продлена</span>

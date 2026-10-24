@@ -87,3 +87,5 @@ dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10
 /* Прогноз: экспорт */
 .forecast__actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
 .forecast__actions .button{min-height:38px;padding:8px 14px}
+
+.forecast__exported{margin:8px 0 0;font-family:Inter,sans-serif;font-size:.75rem;color:#166534}
