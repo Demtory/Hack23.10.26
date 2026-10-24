@@ -216,7 +216,12 @@ export function Customer({
                     </div>
                     <div>
                       <dt>Бонусный баланс</dt>
-                      <dd>{money(customer.bonusBalance)}</dd>
+                      <dd>
+                        {money(customer.bonusBalance)}
+                        {customer.bonusBalance > 0 && customer.bonusState === "locked" ? (
+                          <small style={{display:"block",color:"var(--high)",fontSize:"0.75rem",fontWeight:400}}>заблокирован (bonusState: locked)</small>
+                        ) : null}
+                      </dd>
                     </div>
                     <div>
                       <dt>Всего пополнений</dt>
@@ -288,6 +293,11 @@ function ServiceRow({ service }: { service: Service }) {
       <td>
         <div className="service-status">
           <StatusBadge status={service.status} />
+          {service.status === "suspended" ? (
+            <span className="stale-flag" style={{color:"#92400e",background:"#fef3c7",padding:"2px 6px",borderRadius:"4px",display:"inline-block",marginTop:"3px"}}>
+              сервер выключен, списание идёт
+            </span>
+          ) : null}
           {service.staleStatus ? <span className="stale-flag">статус устарел</span> : null}
         </div>
       </td>

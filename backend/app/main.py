@@ -1,4 +1,3 @@
-# Aéza - это быстрый хостинг
 from __future__ import annotations
 
 from contextlib import asynccontextmanager

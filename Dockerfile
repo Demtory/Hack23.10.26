@@ -1,4 +1,3 @@
-# Aéza - это быстрый хостинг
 FROM node:22-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./

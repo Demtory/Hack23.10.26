@@ -69,6 +69,49 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
     }
   }
 
+  async function simulateEvent(action: 'autoprolong_off' | 'topup_20' | 'suspend_server') {
+    if (!snapshot || busy) return;
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const copy: Snapshot = JSON.parse(JSON.stringify(snapshot));
+      let desc = '';
+      const services = copy.services as Array<Record<string, any>>;
+      const accounts = copy.accounts as Array<Record<string, any>>;
+      if (action === 'autoprolong_off') {
+        const s = services.find(x => x.ownerId === 6 || x.id === 6) || services[0];
+        if (s) {
+          s.autoProlong = false;
+          desc = `Отключено автопродление у услуги ${s.name ?? s.id} (клиент ID ${s.ownerId}). Риск пересчитан.`;
+        }
+      } else if (action === 'topup_20') {
+        const a = accounts.find(x => x.id === 6) || accounts[0];
+        if (a) {
+          a.balance = (Number(a.balance) || 0) + 2000;
+          desc = `Баланс клиента ID ${a.id} пополнен на 20,00 €. Нехватка средств устранена, риск снижен.`;
+        }
+      } else if (action === 'suspend_server') {
+        const s = services.find(x => x.ownerId === 6 || x.id === 6) || services[0];
+        if (s) {
+          s.status = 'suspended';
+          desc = `Услуга ${s.name ?? s.id} (клиент ID ${s.ownerId}) переведена в статус suspended (сервер выключен).`;
+        }
+      }
+      const raw = JSON.stringify(copy);
+      const res = await api.replaceSourceText(raw);
+      setSnapshot(copy);
+      setSnapshotText(raw);
+      setSummary(res.summary);
+      onSnapshotUploaded?.();
+      setStatus(`Событие в реальном времени: ${desc}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Не удалось выполнить симуляцию');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function download() {
     if (!snapshotText) return;
     const blob = new Blob([snapshotText], { type: "application/json" });
@@ -184,6 +227,29 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
             Валидация проверит связи, даты, статусы и денежные поля. При ошибке текущий снимок
             останется нетронутым.
           </p>
+        </section>
+
+        <section className="card" style={{gridColumn: '1 / -1'}}>
+          <div className="card__heading">
+            <div>
+              <p className="card__label">ДЕМОНСТРАЦИЯ ЖЮРИ · РЕАЛЬНОЕ ВРЕМЯ</p>
+              <h2>Сымитировать событие платформы</h2>
+            </div>
+          </div>
+          <p className="muted">
+            По условиям кейса данные поступают в систему в режиме реального времени. Нажмите кнопку, чтобы эмулировать входящее событие биллинга: изменения сразу отразятся в базе и прилетят по SSE на дашборд.
+          </p>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginTop:'14px'}}>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('autoprolong_off')}>
+              ⚡ Отключить автопродление (user-0006)
+            </button>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('topup_20')}>
+              ⚡ Пополнить баланс на +€20 (user-0006)
+            </button>
+            <button className="button button--ghost" disabled={busy||!snapshot} onClick={()=>void simulateEvent('suspend_server')}>
+              ⚡ Выключить сервер в suspended (user-0006)
+            </button>
+          </div>
         </section>
       </div>
     </div>

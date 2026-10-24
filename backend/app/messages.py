@@ -189,6 +189,10 @@ def _details(customer: dict[str, Any], situation: str, service: dict[str, Any] |
             f"Под риском {len(at_risk)} {plural(len(at_risk), 'услуга', 'услуги', 'услуг')} "
             f"на {money_text(total)}; ожидаемые потери — {money_text(customer.get('money', {}).get('expectedLossCents'))}."
         )
+    if customer.get("bonusBalance", 0) > 0 and customer.get("bonusState") != "unlocked":
+        facts.append(
+            f"Бонусный баланс ({money_text(customer['bonusBalance'])}) заблокирован (bonusState: locked) и не может покрыть оплату."
+        )
     score = customer.get("score")
     if score is not None:
         facts.append(f"Оценка риска: {round(score)} из 100 — {LEVEL_LABEL.get(customer.get('level'), 'неизвестный')} уровень.")
@@ -214,7 +218,7 @@ def _email(
             f"а на балансе сейчас {money_text(available)}. Продление стоит {price}, не хватает {gap}.\n\n"
             f"Чтобы услуга продолжила работать, пополните баланс на {gap} в личном кабинете до {deadline}. "
             f"Автопродление сейчас отключено, поэтому списание само не пройдёт.\n\n"
-            f"Если планы изменились — просто ответьте на это письмо. Поможем сохранить данные и подобрать тариф.\n\n"
+            f"Если у вас есть заблокированные бонусы, их можно активировать для покрытия счёта. Если планы изменились — просто ответьте на это письмо. Поможем сохранить данные и подобрать тариф.\n\n"
             f"Хорошего дня!\nКоманда Aéza"
         )
     elif situation == "prolong_wait":
