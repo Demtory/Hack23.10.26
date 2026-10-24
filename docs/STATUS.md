@@ -399,3 +399,7 @@ cookie; добавление metadata/default нового признака вы
   (`marketer@example.test` / `marketer123`); пароль администратора стенда приведён
   к `admin123`, чтобы подсказка в интерфейсе была правдой. Скриншот входа обновлён,
   вход по паролю и SSO повторно проверены на публичном стенде.
+- Админ-консоль Keycloak на стенде открывается по HTTP: master-realm требует HTTPS,
+  поэтому `SSO=1 ./scripts/deploy_remote.sh` после старта выполняет
+  `kcadm update realms/master -s sslRequired=NONE`. Проверено: вход `admin` и дашборд
+  консоли на `http://193.233.246.179:8081/admin/`.
