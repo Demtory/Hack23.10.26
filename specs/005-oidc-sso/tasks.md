@@ -52,7 +52,7 @@
 - [x] T008 Показать коды ошибок SSO человеческим текстом, очищать query после показа.
   Файлы: `frontend/src/pages/Login.tsx`, `frontend/src/styles.css`.
   Зависит: T007. Покрытие: FR-007.
-- [x] T009 Поднять Keycloak профилем `sso`, импортировать realm с клиентом (PKCE)
+- [x] T009 Поднять Keycloak оверлеем `compose.sso.yaml`, импортировать realm с клиентом (PKCE)
   и тестовым пользователем. Файлы: `compose.yaml`, `deploy/keycloak/risk-desk-realm.json`.
   Зависит: T006. Покрытие: FR-010, FR-012.
 

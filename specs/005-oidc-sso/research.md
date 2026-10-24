@@ -65,7 +65,7 @@ host-network (непереносимо), один общий DNS (вне объ�
 
 ## R6. Демо-провайдер
 
-**Решение:** Keycloak 26 профилем `docker compose --profile sso`, импорт realm
+**Решение:** Keycloak 26 отдельным файлом `compose.sso.yaml`, импорт realm
 `deploy/keycloak/risk-desk-realm.json`, клиент `risk-desk` с PKCE и тестовый
 пользователь `marketer@example.test` / `marketer123`.
 

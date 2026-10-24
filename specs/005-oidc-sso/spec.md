@@ -119,7 +119,7 @@
 - **FR-008**: Парольный вход MUST остаться работоспособным и MUST NOT требовать OIDC.
 - **FR-009**: Доработка MUST NOT добавлять runtime-зависимости; HTTP и проверка RSA —
   стандартная библиотека.
-- **FR-010**: DEMO MUST поднимать Keycloak профилем `docker compose --profile sso` с realm,
+- **FR-010**: DEMO MUST поднимать Keycloak оверлеем `docker compose -f compose.yaml -f compose.sso.yaml` с realm,
   клиентом и тестовым пользователем.
 - **FR-011**: `openapi.json` MUST содержать новые пути; существующие контракты MUST
   сохраняться.

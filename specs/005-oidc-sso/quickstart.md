@@ -29,7 +29,7 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/v1/auth/oidc/start  
 ```bash
 cp .env.example .env
 # раскомментировать OIDC_* (значения для compose уже подготовлены)
-docker compose --profile sso up --build
+docker compose -f compose.yaml -f compose.sso.yaml up --build
 ```
 
 1. `http://localhost:8000/#/login` — видна кнопка «Войти через Keycloak».

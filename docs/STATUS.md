@@ -279,7 +279,7 @@ cookie; добавление metadata/default нового признака вы
   `admin@example.test` работает как раньше.
 - `OIDC_INTERNAL_BASE` отделяет публичный issuer от внутреннего адреса провайдера —
   нужно, когда приложение в Docker ходит в Keycloak по имени сервиса.
-- Keycloak для демо: `docker compose --profile sso up --build`, realm `risk-desk`,
+- Keycloak для демо: `docker compose -f compose.yaml -f compose.sso.yaml up --build`, realm `risk-desk`,
   пользователь `marketer@example.test` / `marketer123`. Без профиля приложение
   работает только с паролем.
 - Ошибки провайдера не ломают вход: пользователь возвращается на `/#/login`
@@ -287,3 +287,22 @@ cookie; добавление metadata/default нового признака вы
 - Проверки: `421 passed` (17 новых в `backend/tests/test_oidc.py` с фейковым
   провайдером и настоящей RS256-подписью); в браузере пройден полный вход через
   локальный stub-провайдер до дашборда под `marketer@example.test`.
+
+## Запуск «у всех» (2026-10-24)
+
+- `docker compose up --build` больше не требует `.env`: все демо-значения заданы
+  умолчаниями в `compose.yaml` (`ADMIN_*`, `SESSION_HOURS`, `AS_OF`, `SEED_ON_START`).
+  Файл `.env` остаётся необязательным переопределением и по-прежнему подхватывается.
+- SSO вынесен в оверлей `compose.sso.yaml`: `docker compose -f compose.yaml
+  -f compose.sso.yaml up --build` поднимает Keycloak и сам задаёт `OIDC_*` —
+  профили и ручное редактирование переменных для демо больше не нужны.
+- `APP_PORT` позволяет обойти занятый порт; для SSO-демо порт остаётся8000
+  (redirect URI зарегистрирован в realm).
+- `scripts/smoke.sh` проверяет healthz, метрики, 401 без сессии, панель, логин,
+  `/auth/me` и состояние OIDC одной командой.
+- `.github/workflows/ci.yml`: pytest + генератор, синхронность `openapi.json`,
+  `tsc && vite build`, валидность обоих compose-файлов и сборка образа.
+- README: раздел «Если что-то не запускается» — Docker не запущен, занятый порт,
+  старый Compose, Windows, Apple Silicon, сброс тома.
+- Проверки: `docker compose config -q` без `.env` и с `compose.sso.yaml`;
+  `scripts/smoke.sh` на запущенном приложении — 6/6 ok.

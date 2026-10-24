@@ -14,23 +14,19 @@
 
 ## Быстрый запуск
 
+Нужен только Docker. Настраивать нечего — все значения уже имеют рабочие демо-умолчания.
+
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
-Открыть **http://localhost:8000**, войти:
+Открыть **http://localhost:8000**, войти `admin@example.test` / `admin123`.
 
-```
-admin@example.test
-admin123
-```
-
-Проверка:
+Проверить одной командой, что всё поднялось:
 
 ```bash
-curl -s localhost:8000/metrics | head
-curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/v1/customers  # 401
+./scripts/smoke.sh
+# ok healthz · метрики · закрытый API 401 · панель · логин · сессия
 ```
 
 Остановить и удалить данные:
@@ -39,7 +35,28 @@ curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/v1/customers  # 401
 docker compose down -v
 ```
 
-> Секреты и пароль по умолчанию — только для демо. В `.env` их можно заменить.
+> Пароль и ключи в примерах — только для демо. Переопределяются через `.env`
+> (необязательный файл) или переменные окружения.
+
+### Если что-то не запускается
+
+| Симптом | Причина и решение |
+|---|---|
+| `Cannot connect to the Docker daemon` | Не запущен Docker Desktop / OrbStack. Запустить и повторить. |
+| `port is already allocated` | Порт занят: `APP_PORT=8010 docker compose up --build`, открыть `http://localhost:8010`. |
+| `env file ... not found` | Старый `compose.yaml` или свой файл. Обновиться до текущего `main`: `.env` больше не обязателен. |
+| Старый Docker Compose | Нужен Compose v2 (`docker compose`, а не `docker-compose`). `docker compose version` → 2.20+. |
+| Windows | Те же команды в PowerShell. `./scripts/smoke.sh` — через Git Bash или WSL. |
+| Apple Silicon | Образы `python:3.12-slim`, `node:22-alpine` и Keycloak мультиархитектурные, эмуляция не нужна. |
+| Данные «застряли» после экспериментов | `docker compose down -v` — том пересоздастся из seed. |
+
+Проверки на чистой машине без Docker (разработка):
+
+```bash
+python3.12 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt
+PYTHONPATH=backend .venv/bin/python -m pytest -q backend/tests
+npm --prefix frontend ci && npm --prefix frontend run build
+```
 
 ---
 
@@ -51,7 +68,8 @@ docker compose down -v
 Демо с Keycloak:
 
 ```bash
-docker compose --profile sso up --build   # Keycloak на http://localhost:8081
+docker compose -f compose.yaml -f compose.sso.yaml up --build
+# Keycloak: http://localhost:8081, панель: http://localhost:8000
 ```
 
 На экране входа появится «Войти через Keycloak»; тестовый пользователь —
