@@ -17,6 +17,12 @@
 Нужен только Docker. Настраивать нечего — все значения уже имеют рабочие демо-умолчания.
 
 ```bash
+./scripts/bootstrap.sh     # собрать, запустить, дождаться healthz и прогнать smoke
+```
+
+Или вручную:
+
+```bash
 docker compose up --build
 ```
 
@@ -56,6 +62,30 @@ docker compose down -v
 python3.12 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt
 PYTHONPATH=backend .venv/bin/python -m pytest -q backend/tests
 npm --prefix frontend ci && npm --prefix frontend run build
+```
+
+---
+
+## Работа в команде
+
+Клонируйте репозиторий **один раз**, дальше обновляйтесь через `git pull` — инструкции
+и код приезжают вместе, ничего перекачивать не нужно:
+
+```bash
+git clone git@github.com:Demtory/Hack23.10.26.git
+cd Hack23.10.26
+git pull --rebase          # перед началом работы
+git switch -c feat/my-task # своя ветка на задачу
+```
+
+Правила веток, PR, конфликтов в сгенерированных файлах и разбор «у меня не работает» —
+в [`CONTRIBUTING.md`](CONTRIBUTING.md). CI на каждый push проверяет тесты, сборку,
+OpenAPI, compose и `docker build`.
+
+После чужого пуша достаточно:
+
+```bash
+git pull --rebase && docker compose up --build -d && ./scripts/smoke.sh
 ```
 
 ---
