@@ -20,7 +20,7 @@ export const api={
  login:async(email:string,password:string)=>{const u=await request<User&{token:string}>('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email,password})});changeSession();if(u.token)localStorage.setItem('auth_token',u.token);return u;},
  logout:async()=>{const result=await request<{ok:boolean}>('/api/v1/auth/logout',{method:'POST'});localStorage.removeItem('auth_token');changeSession();return result;},
  customers:(q:CustomerQuery)=>request<CustomerPage>('/api/v1/customers?'+params(q)),
- customer:(id:number)=>request<CustomerDetail>(`/api/v1/customers/${id}`),
+ customer:async(id:number):Promise<CustomerDetail>=>{const r=await requestResponse(`/api/v1/customers/${id}`);const d=await r.json();d.asOf=r.headers.get('X-Calculation-As-Of')??undefined;d.updatedAt=r.headers.get('X-Calculation-Updated-At')??undefined;return d;},
  summary:()=>request<Summary>('/api/v1/analytics/summary'), settings:()=>request<ModelSettings>('/api/v1/model/settings'),
  updateSettings:(payload:Partial<ModelSettings>&{expectedVersion?:number})=>request<{settings:ModelSettings;summary:Summary}>('/api/v1/model/settings',{method:'PATCH',body:JSON.stringify(payload)}),
  source:()=>request<Snapshot>('/api/v1/source/snapshot'),
