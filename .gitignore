@@ -21,3 +21,12 @@ build/
 coverage/
 .venv/
 __pycache__/
+
+# Дополнительные локальные файлы прототипа
+*.pyc
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+data/app.db
+data/app.db-*
+data/score_preview.json

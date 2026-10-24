@@ -1,0 +1,1380 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Churn Risk Analyzer",
+    "description": "Анализатор рисков оттока: кому звонить, почему и сколько денег под угрозой.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Login Api V1 Auth Login Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Me Api V1 Auth Me Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Logout Api V1 Auth Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "summary": "Customers",
+        "operationId": "customers_api_v1_customers_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "score",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Order"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Pagesize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Customers Api V1 Customers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{account_id}": {
+      "get": {
+        "summary": "Customer",
+        "operationId": "customer_api_v1_customers__account_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/summary": {
+      "get": {
+        "summary": "Analytics Summary",
+        "operationId": "analytics_summary_api_v1_analytics_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Analytics Summary Api V1 Analytics Summary Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/model/settings": {
+      "get": {
+        "summary": "Read Settings",
+        "operationId": "read_settings_api_v1_model_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Read Settings Api V1 Model Settings Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Patch Settings",
+        "operationId": "patch_settings_api_v1_model_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Patch Settings Api V1 Model Settings Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/source/snapshot": {
+      "get": {
+        "summary": "Read Snapshot",
+        "operationId": "read_snapshot_api_v1_source_snapshot_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Read Snapshot Api V1 Source Snapshot Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Put Snapshot",
+        "operationId": "put_snapshot_api_v1_source_snapshot_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Put Snapshot Api V1 Source Snapshot Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "summary": "Events",
+        "operationId": "events_api_v1_events_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Healthz",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Prometheus metrics",
+        "operationId": "metrics_root_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email"
+          },
+          "balance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Balance"
+          },
+          "withdrawBalance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Withdrawbalance"
+          },
+          "totalReplenished": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Totalreplenished"
+          },
+          "bonusBalance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Bonusbalance"
+          },
+          "bonusState": {
+            "type": "string",
+            "enum": [
+              "locked",
+              "unlocked"
+            ],
+            "title": "Bonusstate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "withdrawBalance",
+          "totalReplenished",
+          "bonusBalance",
+          "bonusState"
+        ],
+        "title": "AccountIn"
+      },
+      "CustomerDetailOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "withdrawBalance": {
+            "type": "number",
+            "title": "Withdrawbalance"
+          },
+          "bonusBalance": {
+            "type": "number",
+            "title": "Bonusbalance"
+          },
+          "bonusState": {
+            "type": "string",
+            "enum": [
+              "locked",
+              "unlocked"
+            ],
+            "title": "Bonusstate"
+          },
+          "totalReplenished": {
+            "type": "number",
+            "title": "Totalreplenished"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ],
+            "title": "Level"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "drivers": {
+            "items": {
+              "$ref": "#/components/schemas/DriverOut"
+            },
+            "type": "array",
+            "title": "Drivers"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceOut"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "money": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "unknownReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknownreason"
+          },
+          "isEstimated": {
+            "type": "boolean",
+            "title": "Isestimated"
+          },
+          "explanationRules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleExplanation"
+            },
+            "type": "array",
+            "title": "Explanationrules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "withdrawBalance",
+          "bonusBalance",
+          "bonusState",
+          "totalReplenished",
+          "score",
+          "level",
+          "confidence",
+          "summary",
+          "drivers",
+          "services",
+          "money",
+          "unknownReason",
+          "isEstimated",
+          "explanationRules"
+        ],
+        "title": "CustomerDetailOut"
+      },
+      "DriverOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "contribution"
+        ],
+        "title": "DriverOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginIn"
+      },
+      "MoneyOut": {
+        "properties": {
+          "amountAtRisk": {
+            "type": "number",
+            "title": "Amountatrisk"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "coveredLoss": {
+            "type": "number",
+            "title": "Coveredloss"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "mitigation": {
+            "type": "number",
+            "title": "Mitigation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amountAtRisk",
+          "expectedLoss",
+          "coveredLoss",
+          "coverage",
+          "mitigation"
+        ],
+        "title": "MoneyOut"
+      },
+      "MoneyPatch": {
+        "properties": {
+          "balanceMitigation": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balancemitigation"
+          },
+          "includeWithdrawBalance": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Includewithdrawbalance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MoneyPatch"
+      },
+      "ProbabilityPatch": {
+        "properties": {
+          "midpoint": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Midpoint",
+            "description": "Any finite midpoint; values outside 0–100 are supported."
+          },
+          "steepness": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steepness"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "ceiling": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceiling"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProbabilityPatch"
+      },
+      "RuleExplanation": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "status_floor",
+              "stale_status_floor",
+              "customer_bonus",
+              "score_cap"
+            ],
+            "title": "Code"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "service",
+              "customer"
+            ],
+            "title": "Scope"
+          },
+          "serviceId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 9.223372036854776e+18,
+                "minimum": -9.223372036854776e+18
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serviceid"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "beforeScore": {
+            "type": "number",
+            "title": "Beforescore"
+          },
+          "afterScore": {
+            "type": "number",
+            "title": "Afterscore"
+          },
+          "delta": {
+            "type": "number",
+            "title": "Delta"
+          },
+          "relatedServiceIds": {
+            "items": {
+              "type": "integer",
+              "maximum": 9.223372036854776e+18,
+              "minimum": -9.223372036854776e+18
+            },
+            "type": "array",
+            "title": "Relatedserviceids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "scope",
+          "serviceId",
+          "label",
+          "beforeScore",
+          "afterScore",
+          "delta",
+          "relatedServiceIds"
+        ],
+        "title": "RuleExplanation",
+        "description": "Score points rounded to one decimal; delta=round(afterScore-beforeScore,1).\n\nReal effects hidden by rounding remain with delta=0 and an explanatory label.\nIntermediate bonus scores may exceed100; the final customer score may not."
+      },
+      "ServiceIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Name"
+          },
+          "ownerId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Ownerid"
+          },
+          "paymentTerm": {
+            "type": "string",
+            "enum": [
+              "hour",
+              "week",
+              "month",
+              "quarter_year",
+              "half_year",
+              "year"
+            ],
+            "title": "Paymentterm"
+          },
+          "autoProlong": {
+            "type": "boolean",
+            "title": "Autoprolong"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expiresat"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "blocked",
+              "deleted",
+              "suspended",
+              "prolong_wait"
+            ],
+            "title": "Status"
+          },
+          "price": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ownerId",
+          "paymentTerm",
+          "autoProlong",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "price"
+        ],
+        "title": "ServiceIn"
+      },
+      "ServiceOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "paymentTerm": {
+            "type": "string",
+            "title": "Paymentterm"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "autoProlong": {
+            "type": "boolean",
+            "title": "Autoprolong"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "expiresAt": {
+            "type": "string",
+            "title": "Expiresat"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ],
+            "title": "Level"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "staleStatus": {
+            "type": "boolean",
+            "title": "Stalestatus"
+          },
+          "drivers": {
+            "items": {
+              "$ref": "#/components/schemas/DriverOut"
+            },
+            "type": "array",
+            "title": "Drivers"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "expiryDays": {
+            "type": "number",
+            "title": "Expirydays"
+          },
+          "explanationRules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleExplanation"
+            },
+            "type": "array",
+            "title": "Explanationrules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "price",
+          "paymentTerm",
+          "status",
+          "autoProlong",
+          "createdAt",
+          "expiresAt",
+          "score",
+          "level",
+          "confidence",
+          "staleStatus",
+          "drivers",
+          "values",
+          "expiryDays",
+          "explanationRules"
+        ],
+        "title": "ServiceOut"
+      },
+      "SettingsPatch": {
+        "properties": {
+          "weights": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
+          "thresholds": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThresholdsPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbabilityPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "money": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statusFloors": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statusfloors"
+          },
+          "recomputeIntervalSec": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3600.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recomputeintervalsec"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SettingsPatch",
+        "description": "Optional null/omitted fields do not change values. All numeric values must be finite.\n\nThe merged configuration must satisfy medium < high, floor < ceiling and have\na positive weight. These cross-field constraints are enforced by the API."
+      },
+      "SnapshotIn": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountIn"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceIn"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionIn"
+            },
+            "type": "array",
+            "title": "Transactions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "services",
+          "transactions"
+        ],
+        "title": "SnapshotIn",
+        "description": "Full replacement: all arrays and required fields must be explicit; 0/false are valid."
+      },
+      "ThresholdsPatch": {
+        "properties": {
+          "medium": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medium"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMaximum": 100.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ThresholdsPatch"
+      },
+      "TransactionIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "amount": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Amount"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "performed",
+              "not_performed"
+            ],
+            "title": "Status"
+          },
+          "performedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performedat"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "prolong",
+              "order"
+            ],
+            "title": "Type"
+          },
+          "serviceId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Serviceid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "amount",
+          "status",
+          "createdAt",
+          "type",
+          "serviceId"
+        ],
+        "title": "TransactionIn"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sid"
+      }
+    }
+  }
+}
