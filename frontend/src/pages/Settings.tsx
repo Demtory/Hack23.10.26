@@ -60,7 +60,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
   function applyPreset(preset: WeightPreset) {
     if (!draft) return;
     setDraft({ ...draft, weights: { ...draft.weights, ...preset.weights } });
-    setPresetStatus(`Применён набор «${preset.name}». Нажмите «Сохранить», чтобы пересчитать результаты.`);
+    setPresetStatus(`Применён набор «${preset.name}»: веса в черновике. Нажмите «Сохранить и пересчитать», чтобы применить.`);
     setPresetError(null);
   }
 
@@ -116,6 +116,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
     });
   }
   async function save(){await model.save();}
+  async function saveDraft(){setPresetStatus(null);setPresetError(null);await model.save();}
 
   if (!draft) {
     return (
@@ -169,6 +170,18 @@ export function Settings({ liveTick }: { liveTick: number }) {
         </div>
       </div>
 
+      {draft && model.dirty ? (
+        <div className="settings-savebar">
+          <span>Несохранённые изменения весов</span>
+          <div className="settings-savebar__actions">
+            <button className="button button--ghost" onClick={reset} disabled={busy}>Сбросить</button>
+            <button className="button button--primary" onClick={()=>void saveDraft()} disabled={busy||model.state==="conflict"}>
+              {busy ? "Пересчитываем…" : "Сохранить и пересчитать"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <p className="muted">
         После базовой оценки действуют сохранённые минимумы prolong_wait ({draft.statusFloors.prolong_wait}),
         blocked ({draft.statusFloors.blocked}) и устаревшего статуса ({draft.statusFloors.stale}).
@@ -184,7 +197,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
                 <p className="card__label">Готовые настройки</p>
                 <h2>Наборы весов</h2>
               </div>
-              <button className="button" onClick={()=>setSaveOpen(true)} disabled={!draft}>Сохранить как набор</button>
+              <button className="button" onClick={()=>setSaveOpen(true)} disabled={!draft}>Сохранить как новый набор</button>
             </div>
             <p className="muted">
               Набор меняет только веса признаков. Он заполняет черновик — результаты пересчитаются
@@ -203,7 +216,16 @@ export function Settings({ liveTick }: { liveTick: number }) {
                 </div>
               ))}
             </div>
-            {presetStatus ? <p className="preset__status" role="status">{presetStatus}</p> : null}
+            {presetStatus ? (
+              <div className="preset__status-row">
+                <p className="preset__status" role="status">{presetStatus}</p>
+                {model.dirty ? (
+                  <button className="button button--primary" onClick={()=>void saveDraft()} disabled={busy}>
+                    {busy ? "Пересчитываем…" : "Сохранить и пересчитать"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {presetError ? <p className="form-error">{presetError}</p> : null}
           </section>
 
