@@ -41,7 +41,8 @@ except ImportError:  # QR-файлы уже лежат в pitch/, генерац
 ROOT = Path(__file__).resolve().parents[1]
 SHOTS = ROOT / "docs" / "screenshots"
 PITCH_DIR = Path(__file__).resolve().parent
-OUT = PITCH_DIR / "risk-desk-pitch.pptx"
+# Актуальная дека собирается вручную; скрипт оставлен как исторический.
+OUT = PITCH_DIR / "generated-deck.pptx"
 TOTAL_SLIDES = 8
 QR_PATH = PITCH_DIR / "qr-repo.png"
 DEMO_QR_PATH = PITCH_DIR / "qr-demo.png"
