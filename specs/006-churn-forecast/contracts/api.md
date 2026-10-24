@@ -36,3 +36,15 @@
 уровень, статус, вероятность и ожидаемые потери для прогноза), `truncated`.
 Ошибки: 401 без сессии, 422 на неверную дату, `end < date`, факт после среза,
 прогноз не в будущем.
+
+## GET /api/v1/analytics/forecast/export.csv
+
+CSV (UTF-8 BOM, CRLF, все поля в кавычках) с плоским списком услуг:
+`kind` (`fact`/`forecast`), `week_start`, `week_end`, `expires_on`, `service_id`,
+`service_name`, `customer_id`, `email`, `price_eur`, `score`, `risk_level`,
+`probability`, `expected_loss_eur`, `status`, `run_id`, `settings_version`, `as_of`,
+`calculated_at`, `currency`, `csv_format_version`.
+
+Параметры: `kind` (`all` по умолчанию), `pastDays`, `horizonDays` (1…90).
+Текст санитизируется префиксом `text:` при опасном начале (формулы Excel).
+Пустая выборка → 409 `empty_selection`, без сессии → 401.

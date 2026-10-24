@@ -20,7 +20,7 @@ from . import oidc
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
 from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, detail_response
-from .forecast import build_forecast, range_details
+from .forecast import build_forecast, export_rows, range_details
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -293,6 +293,50 @@ def oidc_callback(
                                 headers={"Cache-Control": "no-store"})
     _set_session_cookie(response, token, config)
     return response
+
+@router.get('/analytics/forecast/export.csv', response_class=Response, responses={
+    200: {'content': {'text/csv': {}}, 'description': 'UTF-8 BOM CSV, факт и прогноз по неделям'},
+    409: {'description': 'empty_selection'},
+    401: {'description': 'Authentication required'},
+})
+def export_forecast(
+    kind: str = Query('all', pattern='^(fact|forecast|all)$'),
+    pastDays: int = Query(30, ge=1, le=90),
+    horizonDays: int = Query(30, ge=1, le=90),
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+):
+    summary = _ensure_summary(conn, config)
+    run = latest_run(conn)
+    with read_transaction(conn):
+        settings, version, _updated = get_settings(conn)
+        details = latest_details(conn)
+    as_of = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00"))
+    rows = export_rows(details, as_of, settings, kind, pastDays, horizonDays)
+    if not rows:
+        raise HTTPException(409, detail={'code': 'empty_selection', 'message': 'Нет услуг для экспорта'})
+    output = io.StringIO(newline='')
+    writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator='\r\n')
+    writer.writerow(['kind', 'week_start', 'week_end', 'expires_on', 'service_id', 'service_name',
+                     'customer_id', 'email', 'price_eur', 'score', 'risk_level', 'probability',
+                     'expected_loss_eur', 'status', 'run_id', 'settings_version', 'as_of',
+                     'calculated_at', 'currency', 'csv_format_version'])
+    for row in rows:
+        writer.writerow([
+            row['kind'], row['weekStart'], row['weekEnd'], row['expiresOn'], row['serviceId'],
+            _csv_text(row['serviceName']), row['customerId'], _csv_text(row['email']),
+            _decimal_cents(row['priceCents']), row['score'], row['level'],
+            '' if row['probability'] is None else f"{row['probability']:.4f}",
+            '' if row['expectedLossCents'] is None else _decimal_cents(row['expectedLossCents']),
+            row['status'], run['id'] if run else '', version, summary['asOf'], summary['updatedAt'],
+            'EUR', 1,
+        ])
+    content = output.getvalue().encode('utf-8-sig')
+    return Response(content, media_type='text/csv; charset=utf-8', headers={
+        'Content-Disposition': f'attachment; filename="forecast-run-{run["id"] if run else 0}.csv"',
+        'Cache-Control': 'no-store'})
+
 
 # ----------------------------------------------------------------------- customers
 

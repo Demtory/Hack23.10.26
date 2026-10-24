@@ -207,3 +207,73 @@ def range_details(
         "items": rows[:limit],
         "truncated": len(rows) > limit,
     }
+
+
+def export_rows(
+    customers: list[dict[str, Any]],
+    as_of: datetime,
+    settings: dict[str, Any],
+    kind: str = "all",
+    past_days: int = 30,
+    horizon_days: int = 30,
+    bucket_days: int = 7,
+) -> list[dict[str, Any]]:
+    """Плоский список услуг для CSV: факт, прогноз или оба, с недельными интервалами."""
+    from datetime import date as date_type
+
+    as_of_date = as_of.astimezone(timezone.utc).date()
+    fact_start = as_of_date - timedelta(days=past_days - 1)
+    forecast_start = as_of_date + timedelta(days=1)
+    horizon_end = as_of_date + timedelta(days=horizon_days)
+    rows: list[dict[str, Any]] = []
+
+    for customer in customers:
+        mitigation = float(customer.get("money", {}).get("mitigation") or 0.0)
+        for service in customer.get("services") or []:
+            if service.get("status") == "deleted":
+                continue
+            expires = parse_iso(service["expiresAt"])
+            expires_date = expires.astimezone(timezone.utc).date()
+            chance = None
+            loss = None
+            if expires_date <= as_of_date:
+                if kind not in ("fact", "all") or expires_date < fact_start:
+                    continue
+                index = (expires_date - fact_start).days
+                bucket = index // bucket_days
+                week_start = fact_start + timedelta(days=bucket * bucket_days)
+                week_end = min(week_start + timedelta(days=bucket_days - 1), as_of_date)
+                row_kind = "fact"
+            else:
+                if kind not in ("forecast", "all") or expires_date > horizon_end:
+                    continue
+                index = (expires_date - forecast_start).days
+                bucket = index // bucket_days
+                week_start = forecast_start + timedelta(days=bucket * bucket_days)
+                week_end = min(week_start + timedelta(days=bucket_days - 1), horizon_end)
+                chance = probability(float(service["score"]), settings)
+                loss = round(chance * int(service["priceCents"]) * (1.0 - mitigation))
+                row_kind = "forecast"
+
+            rows.append(
+                {
+                    "kind": row_kind,
+                    "weekStart": week_start.isoformat(),
+                    "weekEnd": week_end.isoformat(),
+                    "expiresOn": expires_date.isoformat(),
+                    "serviceId": int(service["id"]),
+                    "serviceName": service["name"],
+                    "customerId": int(customer["id"]),
+                    "email": customer["email"],
+                    "priceCents": int(service["priceCents"]),
+                    "score": float(service["score"]),
+                    "level": service.get("level"),
+                    "probability": None if chance is None else round(chance, 4),
+                    "expectedLossCents": loss,
+                    "status": service.get("status"),
+                }
+            )
+
+    rows.sort(key=lambda row: (row["kind"] != "fact", row["weekStart"], -(row["expectedLossCents"] or 0),
+                               -row["priceCents"]))
+    return rows

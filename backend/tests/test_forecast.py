@@ -1,4 +1,6 @@
 import copy
+import csv
+import io
 from datetime import date, datetime
 
 import pytest
@@ -160,3 +162,51 @@ def test_forecast_bucket_day_range(client):
         "/api/v1/analytics/forecast/day",
         params={"date": bucket["end"], "end": bucket["date"]},
     ).status_code == 422
+
+
+def test_forecast_export_requires_auth(client):
+    assert client.get("/api/v1/analytics/forecast/export.csv").status_code == 401
+
+
+def test_forecast_export_matches_totals(client):
+    login(client)
+    overview = client.get("/api/v1/analytics/forecast", params={"bucketDays": 7}).json()
+    response = client.get("/api/v1/analytics/forecast/export.csv", params={"kind": "forecast"})
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    assert b"\r\n" in response.content
+    rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
+    assert len(rows) == overview["totals"]["forecastServices"]
+    assert {row["kind"] for row in rows} == {"forecast"}
+    total = sum(float(row["expected_loss_eur"] or 0) for row in rows)
+    assert total == pytest.approx(overview["totals"]["expectedLoss"], abs=0.05)
+    assert rows[0]["week_start"] and rows[0]["week_end"] and rows[0]["service_name"]
+
+
+def test_forecast_export_all_contains_both_kinds(client):
+    login(client)
+    response = client.get("/api/v1/analytics/forecast/export.csv", params={"kind": "all"})
+    rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
+    assert {"fact", "forecast"} <= {row["kind"] for row in rows}
+
+
+def test_forecast_export_sanitizes_formulas(client, full_snapshot):
+    login(client)
+    snapshot = copy.deepcopy(full_snapshot)
+    for account in snapshot["accounts"]:
+        if account["id"] == 6:
+            account["email"] = "=SUM(1,2)@example.test"
+    assert client.put("/api/v1/source/snapshot", json=snapshot).status_code == 200
+    text = client.get(
+        "/api/v1/analytics/forecast/export.csv", params={"kind": "forecast"}
+    ).content.decode("utf-8-sig")
+    assert "text:=SUM(1,2)@example.test" in text
+
+
+def test_forecast_export_empty_is_409(client, full_snapshot):
+    login(client)
+    snapshot = copy.deepcopy(full_snapshot)
+    for service in snapshot["services"]:
+        service["status"] = "deleted"
+    assert client.put("/api/v1/source/snapshot", json=snapshot).status_code == 200
+    assert client.get("/api/v1/analytics/forecast/export.csv").status_code == 409

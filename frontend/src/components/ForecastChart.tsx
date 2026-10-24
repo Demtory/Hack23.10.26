@@ -42,6 +42,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
   const [selected, setSelected] = useState<Selection | null>(null);
   const [day, setDay] = useState<ForecastDay | null>(null);
   const [dayError, setDayError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +95,24 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
 
   const height = (value: number) => (value ? `${Math.max(6, (value / peak) * 100)}%` : "0%");
   const isActive = (date: string, kind: Kind) => selected?.date === date && selected?.kind === kind;
+  const download = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const result = await api.forecastExport("all");
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Не удалось скачать CSV");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggle = (date: string, end: string, kind: Kind) =>
     setSelected((current) =>
       current && current.date === date && current.kind === kind ? null : { date, end, kind },
@@ -105,10 +125,17 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
           <p className="card__label">ПРОГНОЗ</p>
           <h2 id="forecast-heading">Когда наступает отток</h2>
         </div>
-        <span className="card__meta">
-          {data.pastDays} дней до и {data.horizonDays} после среза
-        </span>
+        <div className="forecast__actions">
+          <span className="card__meta">
+            {data.pastDays} дней до и {data.horizonDays} после среза
+          </span>
+          <button className="button" onClick={() => void download()} disabled={exporting}>
+            {exporting ? "Готовим CSV…" : "Экспорт прогноза"}
+          </button>
+        </div>
       </div>
+
+      {exportError ? <p className="form-error">{exportError}</p> : null}
 
       <div className="forecast__legend">
         <span className="forecast__key forecast__key--fact">Факт: срок истёк, услуга не продлена</span>

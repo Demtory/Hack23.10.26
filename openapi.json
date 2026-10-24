@@ -220,6 +220,81 @@
         "security": []
       }
     },
+    "/api/v1/analytics/forecast/export.csv": {
+      "get": {
+        "summary": "Export Forecast",
+        "operationId": "export_forecast_api_v1_analytics_forecast_export_csv_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(fact|forecast|all)$",
+              "default": "all",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "pastDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Pastdays"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Horizondays"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UTF-8 BOM CSV, факт и прогноз по неделям",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "409": {
+            "description": "empty_selection"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/customers": {
       "get": {
         "summary": "Customers",

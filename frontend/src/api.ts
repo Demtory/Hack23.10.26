@@ -23,6 +23,7 @@ export const api={
  customers:(q:CustomerQuery)=>request<CustomerPage>('/api/v1/customers?'+params(q)),
  customer:async(id:number):Promise<CustomerDetail>=>{const r=await requestResponse(`/api/v1/customers/${id}`);const d=await r.json();d.asOf=r.headers.get('X-Calculation-As-Of')??undefined;d.updatedAt=r.headers.get('X-Calculation-Updated-At')??undefined;return d;},
  summary:()=>request<Summary>('/api/v1/analytics/summary'), forecast:(bucketDays=1)=>request<Forecast>(`/api/v1/analytics/forecast?bucketDays=${bucketDays}`),
+ forecastExport:async(kind:'fact'|'forecast'|'all'='all')=>{const r=await requestResponse(`/api/v1/analytics/forecast/export.csv?kind=${kind}`);return{blob:await r.blob(),filename:`forecast-${new Date().toISOString().slice(0,10)}.csv`};},
  forecastDay:(date:string,end:string,kind:'fact'|'forecast')=>request<ForecastDay>(`/api/v1/analytics/forecast/day?date=${encodeURIComponent(date)}&end=${encodeURIComponent(end)}&kind=${kind}`), settings:()=>request<ModelSettings>('/api/v1/model/settings'),
  updateSettings:(payload:Partial<ModelSettings>&{expectedVersion?:number})=>request<{settings:ModelSettings;summary:Summary}>('/api/v1/model/settings',{method:'PATCH',body:JSON.stringify(payload)}),
  source:()=>request<Snapshot>('/api/v1/source/snapshot'),
