@@ -136,6 +136,7 @@ docker compose -f compose.yaml -f compose.sso.yaml up --build
 | Статус реализации | [`docs/STATUS.md`](docs/STATUS.md) |
 | Спецификации по этапам (Spec Kit) | [`specs/`](specs) — 001 модель, 002 данные/UI, 003 панель, 004 тексты и письмо, 005 SSO |
 | **Жюри: запуск за 3 минуты** | [`docs/JURY.md`](docs/JURY.md) |
+| **Питч-дека** | [`pitch/risk-desk-pitch.pptx`](pitch/risk-desk-pitch.pptx) — 8 слайдов, собирается `pitch/build_pitch.py` |
 
 ---
 

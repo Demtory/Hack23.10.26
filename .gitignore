@@ -39,3 +39,6 @@ test-results/
 .agents/skills/slides/
 .agents/skills/ui-styling/
 .agents/skills/ui-ux-pro-max/
+
+# Временные файлы рендера (LibreOffice Kit, превью)
+.dsh-office.*/
