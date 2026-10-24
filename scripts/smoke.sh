@@ -34,6 +34,13 @@ me_code="$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIES" "$BASE/api/v1/au
 [ "$me_code" = "200" ] || fail "/auth/me: ожидали 200, получили $me_code"
 printf 'ok   сессия (/auth/me)\n'
 
+forecast_code="$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIES" "$BASE/api/v1/analytics/forecast?bucketDays=7")"
+[ "$forecast_code" = "200" ] || fail "прогноз: ожидали 200, получили $forecast_code"
+printf 'ok   прогноз (/analytics/forecast)\n'
+
+csv_head="$(curl -s -b "$COOKIES" "$BASE/api/v1/analytics/forecast/export.csv?kind=all" | head -1)"
+case "$csv_head" in *week_start*) printf 'ok   экспорт прогноза (CSV)\n' ;; *) fail "экспорт прогноза: в CSV нет заголовка week_start" ;; esac
+
 oidc_json="$(curl -s "$BASE/api/v1/auth/oidc/config")"
 case "$oidc_json" in *'"enabled":true'*) oidc_state=true ;; *) oidc_state=false ;; esac
 printf 'ok   oidc/config (enabled=%s)\n' "$oidc_state"
