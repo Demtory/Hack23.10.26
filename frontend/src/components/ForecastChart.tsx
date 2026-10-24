@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { downloadBlob } from "../download";
 import type { Forecast, ForecastDay } from "../types";
-import { money, shortDate } from "./ui";
+import { clientsWord, money, plural, servicesWord, shortDate } from "./ui";
 
 type Kind = "fact" | "forecast";
 type Selection = { date: string; end: string; kind: Kind };
@@ -179,8 +179,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
                   className={`forecast__slot ${isActive(point.date, "fact") ? "forecast__slot--active" : ""}`}
                   onClick={() => toggle(point.date, point.end, "fact")}
                   aria-pressed={isActive(point.date, "fact")}
-                  aria-label={`${rangeLabel(point.date, point.end)}, факт: ${point.services} услуг, ${point.customers} клиентов`}
-                  title={`${rangeLabel(point.date, point.end)} — ${point.services} услуг, ${point.customers} клиентов`}
+                  aria-label={`${rangeLabel(point.date, point.end)}, факт: ${servicesWord(point.services)}, ${clientsWord(point.customers)}`}
+                  title={`${rangeLabel(point.date, point.end)} — ${servicesWord(point.services)}, ${clientsWord(point.customers)}`}
                 >
                   <b className="forecast__value">{point.services || ""}</b>
                   {point.services ? (
@@ -204,8 +204,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
                   className={`forecast__slot ${isActive(point.date, "forecast") ? "forecast__slot--active" : ""}`}
                   onClick={() => toggle(point.date, point.end, "forecast")}
                   aria-pressed={isActive(point.date, "forecast")}
-                  aria-label={`${rangeLabel(point.date, point.end)}, прогноз: ${point.services} услуг, ожидаемо ${point.expectedNonRenewals} непродлений на ${money(point.expectedLoss)}`}
-                  title={`${rangeLabel(point.date, point.end)} — ${point.services} услуг, ожидаемо ${point.expectedNonRenewals}, ${money(point.expectedLoss)}`}
+                  aria-label={`${rangeLabel(point.date, point.end)}, прогноз: ${servicesWord(point.services)}, ожидаемо ${point.expectedNonRenewals} непродлений на ${money(point.expectedLoss)}`}
+                  title={`${rangeLabel(point.date, point.end)} — ${servicesWord(point.services)}, ожидаемо ${point.expectedNonRenewals}, ${money(point.expectedLoss)}`}
                 >
                   <b className="forecast__value">{point.services || ""}</b>
                   {point.services ? (
@@ -237,12 +237,12 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
         <div>
           <span>Истекло и не продлено</span>
           <strong>{data.totals.factServices}</strong>
-          <small>услуг у {data.totals.factCustomers} клиентов</small>
+          <small>услуг у {data.totals.factCustomers} {plural(data.totals.factCustomers, "клиента", "клиентов", "клиентов")}</small>
         </div>
         <div>
           <span>Ожидаемо не продлят</span>
           <strong>{data.totals.expectedNonRenewals}</strong>
-          <small>из {data.totals.forecastServices} услуг впереди</small>
+          <small>из {servicesWord(data.totals.forecastServices)} впереди</small>
         </div>
         <div>
           <span>Ожидаемые потери</span>
@@ -264,8 +264,8 @@ export function ForecastChart({ liveTick }: { liveTick: number }) {
               <h3>{rangeLabel(selected.date, selected.end)}</h3>
             </div>
             <div className="forecast__panel-meta">
-              <span>{day?.services ?? "…"} услуг</span>
-              <span>{day?.customers ?? "…"} клиентов</span>
+              <span>{day ? servicesWord(day.services) : "…"}</span>
+              <span>{day ? clientsWord(day.customers) : "…"}</span>
               {selected.kind === "forecast" && day ? <span>{money(day.expectedLoss)} ожидаемо</span> : null}
             </div>
             <button className="button button--ghost" onClick={() => setSelected(null)}>

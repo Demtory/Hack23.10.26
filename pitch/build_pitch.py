@@ -169,7 +169,7 @@ def build() -> Path:
     text(slide, MARGIN + 0.2, 5.05, 11, 0.4,
          "Панель маркетолога: приоритет клиентов, причины риска и деньги под угрозой", 14, color=MUTED)
     text(slide, MARGIN + 0.2, 6.55, 11, 0.35,
-         "FastAPI · React · SQLite · один Docker-образ · 422 теста · CI", 11, color=MUTED, font=BODY)
+         "FastAPI · React · SQLite · один Docker-образ · 441 тест · CI", 11, color=MUTED, font=BODY)
     note(slide, "30 секунд: кто мы, что покажем. Дальше — проблема, решение, как считаем, что уже работает.")
 
     # 2 ─ проблема
@@ -289,7 +289,7 @@ def build() -> Path:
     title(slide, "Одна команда — и проверки машиной")
     cards = [
         ("1 команда", "docker compose up --build\n12 секунд до healthz"),
-        ("422 теста", "backend + генератор данных\n7 e2e в браузере"),
+        ("441 тест", "backend + генератор данных\n9 e2e в браузере"),
         ("CI", "pytest, сборка, OpenAPI,\ncompose и docker build"),
         ("SSO", "OIDC + PKCE, Keycloak\nв отдельном оверлее"),
     ]

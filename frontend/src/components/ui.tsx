@@ -46,6 +46,10 @@ export function servicesWord(count: number): string {
   return `${count} ${plural(count, "услуга", "услуги", "услуг")}`;
 }
 
+export function clientsWord(count: number): string {
+  return `${count} ${plural(count, "клиент", "клиента", "клиентов")}`;
+}
+
 export function termLabel(term: string): string {
   return TERM_LABEL[term] ?? term;
 }
