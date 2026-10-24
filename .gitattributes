@@ -1,0 +1,27 @@
+# Единые окончания строк и типы файлов.
+# Текст нормализуется в LF в репозитории; бинарники не трогаем.
+* text=auto
+
+*.py text
+*.ts text
+*.tsx text
+*.css text
+*.html text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+*.sh text eol=lf
+*.sql text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.woff2 binary
+*.pptx binary
+
+*.svg text
