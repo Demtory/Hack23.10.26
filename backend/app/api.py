@@ -19,8 +19,9 @@ from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredenti
 from . import oidc
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
-from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, detail_response
+from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, PresetIn, PresetListOut, PresetOut, detail_response
 from .forecast import build_forecast, export_rows, range_details
+from .presets import create_preset, delete_preset, list_presets
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -677,6 +678,39 @@ def patch_settings(
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="Изменение не применено; сохранено прежнее состояние") from None
+
+
+@router.get("/model/presets", response_model=PresetListOut)
+def model_presets(
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    return {"presets": list_presets(conn)}
+
+
+@router.post("/model/presets", response_model=PresetOut, status_code=201)
+def save_model_preset(
+    body: PresetIn,
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    try:
+        return create_preset(conn, body.name, body.weights, iso_z(utcnow()))
+    except LookupError as exc:
+        raise HTTPException(status_code=409, detail={"code": "preset_conflict", "message": str(exc)})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "invalid_preset", "message": str(exc)})
+
+
+@router.delete("/model/presets/{preset_id}", status_code=204)
+def remove_model_preset(
+    preset_id: str,
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+) -> Response:
+    if not delete_preset(conn, preset_id):
+        raise HTTPException(status_code=404, detail="preset not found")
+    return Response(status_code=204)
 
 
 # -------------------------------------------------------------------------- source

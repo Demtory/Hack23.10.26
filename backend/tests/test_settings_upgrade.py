@@ -8,8 +8,12 @@ from app.main import create_app
 from .conftest import database_state
 
 
-def add_feature(monkeypatch, generation=2, code='future_signal'):
-    monkeypatch.setitem(scoring.FEATURE_GENERATIONS,generation,frozenset({code}))
+def add_feature(monkeypatch, generation=None, code='future_signal'):
+    """Добавляет синтетическое следующее поколение поверх текущего максимума."""
+    current = max(scoring.FEATURE_GENERATIONS)
+    generation = generation or current + 1
+    keys = frozenset(set(scoring.FEATURE_GENERATIONS[current]) | {code})
+    monkeypatch.setitem(scoring.FEATURE_GENERATIONS,generation,keys)
     monkeypatch.setitem(scoring.DEFAULT_SETTINGS['weights'],code,0.2)
     monkeypatch.setattr(api,'FEATURES_META',scoring.FEATURES_META+[dict(scoring.FEATURES_META[0],code=code,default=.2)])
 
@@ -27,7 +31,7 @@ def test_old_upgrade_once(session,config,monkeypatch):
     assert c.get('/api/v1/customers/5').json()==details
     assert session.restart().get('/api/v1/model/settings').json()==after
     with sqlite3.connect(config.db_path) as db:
-        assert db.execute('SELECT feature_schema_version FROM settings').fetchone()[0]==2
+        assert db.execute('SELECT feature_schema_version FROM settings').fetchone()[0]==max(scoring.FEATURE_GENERATIONS)
 
 
 @pytest.mark.parametrize('damage',['missing','unknown','negative','nan','future_generation'])
@@ -78,7 +82,9 @@ def test_physical_legacy_schema(session,config,monkeypatch):
 def test_multiple_generations_and_explicit(session,config,monkeypatch,weight):
     before=session.client.get('/api/v1/model/settings').json();session.stack.close()
     add_feature(monkeypatch)
-    monkeypatch.setitem(scoring.FEATURE_GENERATIONS,3,frozenset({'second_signal'}))
+    next_generation = max(scoring.FEATURE_GENERATIONS) + 1
+    monkeypatch.setitem(scoring.FEATURE_GENERATIONS,next_generation,
+                        frozenset(set(scoring.FEATURE_GENERATIONS[next_generation-1])|{'second_signal'}))
     monkeypatch.setitem(scoring.DEFAULT_SETTINGS['weights'],'second_signal',.1)
     monkeypatch.setattr(api,'FEATURES_META',api.FEATURES_META+[dict(api.FEATURES_META[0],code='second_signal',default=.1)])
     with sqlite3.connect(config.db_path) as c:

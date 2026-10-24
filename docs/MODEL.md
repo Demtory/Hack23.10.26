@@ -96,6 +96,7 @@ available = balance
 | `status_pressure` | услуга | Состояние услуги | `prolong_wait` → 1.0; `blocked` → 0.9; `suspended` → 0.7; `active` → 0.0 | 0.10 |
 | `payment_history` | аккаунт | Были ли неоплаченные счета | Неоплаченный `prolong` → 1.0; неоплаченный `order` → 0.6; иначе 0.0; нет транзакций → `null` | 0.10 |
 | `commitment` | аккаунт | Насколько клиент «вложился» | `1 − min(1, totalReplenished / (3 × Σ price аккаунта))` | 0.05 |
+| `auto_off_share` | аккаунт | Привычка отключать автопродление | доля неудалённых услуг аккаунта с `autoProlong=false` | 0.00 (поколение 2) |
 
 ### 3.1. Устаревшие статусы
 
@@ -285,7 +286,8 @@ covered_loss  = Σ( P × price × mitigation )
     "autorenew_off": 0.10,
     "status_pressure": 0.10,
     "payment_history": 0.10,
-    "commitment": 0.05
+    "commitment": 0.05,
+    "auto_off_share": 0.00
   },
   "thresholds": {"medium": 40, "high": 70},
   "probability": {"midpoint": 65, "steepness": 12, "floor": 0.02, "ceiling": 0.95},
@@ -298,6 +300,17 @@ covered_loss  = Σ( P × price × mitigation )
 
 Валидация: конечные веса `≥ 0`, сумма `> 0`; `0 < medium < high < 100`;
 `0 ≤ balance_mitigation ≤ 1`; `steepness > 0`.
+
+### 9.1. Поколения и пресеты
+
+- Новый признак объявляется новым поколением `FEATURE_GENERATIONS`; при старте
+  старые настройки дополняются его кодом с весом 0, прежние оценки не меняются.
+  Так добавлен `auto_off_share` (поколение 2): при весе 0 клиент 6 остаётся 89.0.
+- Готовые наборы весов («Сбалансированный», «Деньги важнее», «Срочность важнее»,
+  «Статус и оплата») заданы в `backend/app/presets.py`; свои наборы лежат в таблице
+  `weight_presets` и отдаются `/api/v1/model/presets`.
+- Пресет меняет только веса. Пороги, минимумы по статусам и денежные правила
+  остаются отдельными настройками.
 
 ---
 

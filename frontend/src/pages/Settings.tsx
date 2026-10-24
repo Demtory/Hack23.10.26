@@ -3,7 +3,7 @@ import {Dialog} from "../components/ui";
 import {CalculationContext} from "../components/CalculationContext";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
-import type { ModelSettings, Summary } from "../types";
+import type { ModelSettings, Summary, WeightPreset } from "../types";
 import { ErrorBox, money, Spinner } from "../components/ui";
 
 const DEFAULTS = {
@@ -37,13 +37,62 @@ const FEATURE_EXPLANATIONS: Record<string, { guide: string; impact: string }> = 
     guide: "1 − min(1, totalReplenished / (3 × сумма цен всех услуг аккаунта)). При нулевой сумме цен фактор неизвестен.",
     impact: "Большие пополнения уменьшают этот эвристический фактор; это не доказанная лояльность клиента.",
   },
+  auto_off_share: {
+    guide: "Доля неудалённых услуг аккаунта без автопродления: 0 — включено везде, 1 — ни у одной услуги. Считается по клиенту, а не по одной услуге.",
+    impact: "Вес 0 отключает вклад признака; по умолчанию 0, чтобы не менять прежние оценки. Отличается от autorenew_off: тот про конкретную услугу, этот — про привычку клиента.",
+  },
 };
 
 export function Settings({ liveTick }: { liveTick: number }) {
   const model=useDraft();
   const {settings,draft,setDraft,summary,error,busy}=model;
   const [discardPrompt,setDiscardPrompt]=useState(false);
+  const [presets,setPresets]=useState<WeightPreset[]>([]);
+  const [presetError,setPresetError]=useState<string|null>(null);
+  const [presetStatus,setPresetStatus]=useState<string|null>(null);
+  const [saveOpen,setSaveOpen]=useState(false);
+  const [presetName,setPresetName]=useState("");
+  const [savingPreset,setSavingPreset]=useState(false);
+  const [deleteTarget,setDeleteTarget]=useState<WeightPreset|null>(null);
   useEffect(()=>{void model.load();},[liveTick]);
+  useEffect(()=>{let active=true;api.presets().then(r=>{if(active)setPresets(r.presets);}).catch(()=>{if(active)setPresetError("Не удалось загрузить готовые наборы");});return()=>{active=false;};},[]);
+
+  function applyPreset(preset: WeightPreset) {
+    if (!draft) return;
+    setDraft({ ...draft, weights: { ...draft.weights, ...preset.weights } });
+    setPresetStatus(`Применён набор «${preset.name}». Нажмите «Сохранить», чтобы пересчитать результаты.`);
+    setPresetError(null);
+  }
+
+  async function savePreset() {
+    if (!draft || !presetName.trim() || savingPreset) return;
+    setSavingPreset(true);
+    setPresetError(null);
+    try {
+      const created = await api.createPreset(presetName.trim(), draft.weights);
+      setPresets((current) => [...current, created]);
+      setPresetStatus(`Набор «${created.name}» сохранён.`);
+      setSaveOpen(false);
+      setPresetName("");
+    } catch (error) {
+      setPresetError(error instanceof ApiError ? error.message : "Не удалось сохранить набор");
+    } finally {
+      setSavingPreset(false);
+    }
+  }
+
+  async function removePreset(preset: WeightPreset) {
+    setPresetError(null);
+    try {
+      await api.deletePreset(preset.id);
+      setPresets((current) => current.filter((item) => item.id !== preset.id));
+      setPresetStatus(`Набор «${preset.name}» удалён.`);
+    } catch (error) {
+      setPresetError(error instanceof ApiError ? error.message : "Не удалось удалить набор");
+    } finally {
+      setDeleteTarget(null);
+    }
+  }
   const status=model.state==='saved'?'Настройки сохранены. Результаты относятся к применённой версии.':model.state==='conflict'?'Конфликт версий. Черновик сохранён; загрузка текущей модели требует отказа от правок.':model.state==='uncertain'?'Результат операции неизвестен. Черновик сохранён; автоматического повтора нет.':model.dirty?'Несохранённый черновик — результаты ещё не изменены.':null;
   const weightSum = useMemo(
     () => (draft ? Object.values(draft.weights).reduce((sum, value) => sum + value, 0) : 0),
@@ -132,6 +181,35 @@ export function Settings({ liveTick }: { liveTick: number }) {
           <section className="card">
             <div className="card__heading">
               <div>
+                <p className="card__label">Готовые настройки</p>
+                <h2>Наборы весов</h2>
+              </div>
+              <button className="button" onClick={()=>setSaveOpen(true)} disabled={!draft}>Сохранить как набор</button>
+            </div>
+            <p className="muted">
+              Набор меняет только веса признаков. Он заполняет черновик — результаты пересчитаются
+              после «Сохранить». Пороги, минимумы и денежные правила остаются как есть.
+            </p>
+            <div className="presets">
+              {presets.map((preset) => (
+                <div className="preset" key={preset.id}>
+                  <button className="preset__apply" onClick={()=>applyPreset(preset)}>
+                    <strong>{preset.name}</strong>
+                    <small>{preset.description}</small>
+                  </button>
+                  {!preset.builtin ? (
+                    <button className="preset__delete" aria-label={`Удалить набор ${preset.name}`} onClick={()=>setDeleteTarget(preset)}>×</button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {presetStatus ? <p className="preset__status" role="status">{presetStatus}</p> : null}
+            {presetError ? <p className="form-error">{presetError}</p> : null}
+          </section>
+
+          <section className="card">
+            <div className="card__heading">
+              <div>
                 <p className="card__label">Коэффициенты</p>
                 <h2>Веса признаков</h2>
               </div>
@@ -146,11 +224,9 @@ export function Settings({ liveTick }: { liveTick: number }) {
                   <div className="weight-row" key={feature.code}>
                     <div className="weight-row__head">
                       <div>
-                        <div>
+                        <div className="weight-row__title">
                           <strong>{feature.title}</strong>
-                          <span>
-                            доля в модели: {sharePercent}%
-                          </span>
+                          <span>доля в модели: {sharePercent}%</span>
                         </div>
                         <p>{feature.description}</p>
                         {info && (
@@ -316,6 +392,28 @@ export function Settings({ liveTick }: { liveTick: number }) {
       </div>
       </fieldset>
       <CalculationContext asOf={summary?.asOf} updatedAt={summary?.updatedAt}/>
+      {saveOpen ? (
+        <Dialog title="Сохранить набор весов" onCancel={()=>{setSaveOpen(false);setPresetName("");}}>
+          <p>Текущие веса черновика сохранятся как именованный набор. Пороги и денежные правила в набор не входят.</p>
+          <label className="field">
+            <span>Название набора</span>
+            <input value={presetName} maxLength={40} autoFocus onChange={(event)=>setPresetName(event.target.value)} placeholder="Например, «Кампания по пополнениям»" />
+          </label>
+          <div className="dialog-actions">
+            <button className="button button--primary" disabled={savingPreset||!presetName.trim()} onClick={()=>void savePreset()}>{savingPreset?"Сохраняем…":"Сохранить набор"}</button>
+            <button className="button" onClick={()=>{setSaveOpen(false);setPresetName("");}}>Отмена</button>
+          </div>
+        </Dialog>
+      ) : null}
+      {deleteTarget ? (
+        <Dialog title={`Удалить набор «${deleteTarget.name}»?`} onCancel={()=>setDeleteTarget(null)}>
+          <p>Набор исчезнет из списка. Настройки модели и черновик не изменятся.</p>
+          <div className="dialog-actions">
+            <button className="button" autoFocus onClick={()=>setDeleteTarget(null)}>Оставить</button>
+            <button className="button" onClick={()=>void removePreset(deleteTarget)}>Удалить</button>
+          </div>
+        </Dialog>
+      ) : null}
       {discardPrompt&&<Dialog title="Отказаться от черновика?" onCancel={()=>setDiscardPrompt(false)}><p>Локальные изменения будут заменены текущими настройками.</p><button className="button button--primary" autoFocus onClick={()=>setDiscardPrompt(false)}>Остаться</button><button className="button" onClick={()=>{setDiscardPrompt(false);void model.load(true);}}>Отказаться и загрузить</button></Dialog>}
     </div>
   );

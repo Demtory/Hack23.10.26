@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictFloat, field_validator, model_validator
 
 from .messages import build_customer_messages
 
@@ -394,3 +394,20 @@ class ForecastDayOut(APIModel):
     expected_loss: FiniteFloat
     items: list[ForecastDayItem]
     truncated: bool
+
+
+class PresetOut(APIModel):
+    id: str
+    name: str
+    builtin: bool
+    description: str
+    weights: dict[str, FiniteFloat]
+
+
+class PresetListOut(APIModel):
+    presets: list[PresetOut]
+
+
+class PresetIn(APIModel):
+    name: str
+    weights: dict[str, StrictFloat]

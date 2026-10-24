@@ -1,4 +1,4 @@
-import type { CustomerDetail, CustomerPage, Forecast, ForecastDay, Level, ModelSettings, Snapshot, Summary, User } from './types';
+import type { CustomerDetail, CustomerPage, Forecast, ForecastDay, Level, ModelSettings, Snapshot, Summary, User, WeightPreset, WeightPresetList } from './types';
 export class ApiError extends Error { constructor(public status:number,message:string,public code?:string){super(message);} }
 let epoch=0;
 export function changeSession(){epoch++;}
@@ -25,6 +25,9 @@ export const api={
  summary:()=>request<Summary>('/api/v1/analytics/summary'), forecast:(bucketDays=1)=>request<Forecast>(`/api/v1/analytics/forecast?bucketDays=${bucketDays}`),
  forecastExport:async(kind:'fact'|'forecast'|'all'='all')=>{const r=await requestResponse(`/api/v1/analytics/forecast/export.csv?kind=${kind}`);return{blob:await r.blob(),filename:`forecast-${new Date().toISOString().slice(0,10)}.csv`};},
  forecastDay:(date:string,end:string,kind:'fact'|'forecast')=>request<ForecastDay>(`/api/v1/analytics/forecast/day?date=${encodeURIComponent(date)}&end=${encodeURIComponent(end)}&kind=${kind}`), settings:()=>request<ModelSettings>('/api/v1/model/settings'),
+ presets:()=>request<WeightPresetList>('/api/v1/model/presets'),
+ createPreset:(name:string,weights:Record<string,number>)=>request<WeightPreset>('/api/v1/model/presets',{method:'POST',body:JSON.stringify({name,weights})}),
+ deletePreset:(id:string)=>request<void>(`/api/v1/model/presets/${encodeURIComponent(id)}`,{method:'DELETE'}),
  updateSettings:(payload:Partial<ModelSettings>&{expectedVersion?:number})=>request<{settings:ModelSettings;summary:Summary}>('/api/v1/model/settings',{method:'PATCH',body:JSON.stringify(payload)}),
  source:()=>request<Snapshot>('/api/v1/source/snapshot'),
  sourceText:async()=>{const r=await requestResponse('/api/v1/source/snapshot');return r.text();},

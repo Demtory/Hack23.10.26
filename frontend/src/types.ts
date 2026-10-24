@@ -223,3 +223,15 @@ export interface ForecastDay {
   items: ForecastDayItem[];
   truncated: boolean;
 }
+
+export interface WeightPreset {
+  id: string;
+  name: string;
+  builtin: boolean;
+  description: string;
+  weights: Record<string, number>;
+}
+
+export interface WeightPresetList {
+  presets: WeightPreset[];
+}

@@ -211,7 +211,7 @@ def build() -> Path:
     slide = new_slide(prs, number=4)
     eyebrow(slide, "Модель")
     title(slide, "Прозрачные правила вместо чёрного ящика")
-    text(slide, MARGIN, 2.3, 6.4, 0.35, "ШЕСТЬ ПРИЗНАКОВ И ВЕСА (МЕНЯЮТСЯ В ПАНЕЛИ)", 10, bold=True, color=MUTED)
+    text(slide, MARGIN, 2.3, 6.4, 0.35, "СЕМЬ ПРИЗНАКОВ И ВЕСА (МЕНЯЮТСЯ В ПАНЕЛИ)", 10, bold=True, color=MUTED)
     weights = [
         ("Срочность продления", "0,40"), ("Нехватка денег", "0,25"),
         ("Автопродление off", "0,10"), ("Статус услуги", "0,10"),
@@ -225,7 +225,8 @@ def build() -> Path:
         text(slide, x, y, 2.45, 0.3, name, 12, color=INK)
         text(slide, x + 2.45, y, 0.6, 0.3, weight, 12, bold=True, color=MUTED, align=PP_ALIGN.RIGHT)
         rect(slide, x, y + 0.42, 3.05, 0.01, LINE)
-    text(slide, MARGIN, 4.55, 6.2, 0.9, "Score 0–100 · уровни 40/70 · prolong_wait и устаревшие статусы\nполучают минимум 70, blocked — 60", 12, color=MUTED)
+    text(slide, MARGIN, 4.5, 6.2, 0.4, "+ новый признак: доля услуг без автопродления, вес 0,00 — прежние оценки не меняются", 10.5, color=MUTED)
+    text(slide, MARGIN, 4.95, 6.2, 0.9, "Score 0–100 · уровни 40/70 · prolong_wait и устаревшие статусы\nполучают минимум 70, blocked — 60", 11, color=MUTED)
     box = rect(slide, 7.35, 2.35, 5.05, 3.9, BG, radius=True)
     text(slide, 7.65, 2.6, 4.5, 0.35, "ДЕНЬГИ", 10, bold=True, color=MUTED)
     text(slide, 7.65, 3.0, 4.5, 0.6, "P(score) × price × (1 − 0,5 × покрытие)", 15, bold=True, font=HEAD)

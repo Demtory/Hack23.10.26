@@ -59,6 +59,14 @@ CREATE TABLE IF NOT EXISTS transactions (
     type TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS weight_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    weights TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     payload TEXT NOT NULL,

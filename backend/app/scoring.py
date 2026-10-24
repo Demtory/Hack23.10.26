@@ -16,6 +16,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "status_pressure": 0.10,
         "payment_history": 0.10,
         "commitment": 0.05,
+        "auto_off_share": 0.0,
     },
     "thresholds": {"medium": 40.0, "high": 70.0},
     "probability": {"midpoint": 65.0, "steepness": 12.0, "floor": 0.02, "ceiling": 0.95},
@@ -25,9 +26,17 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 # Immutable baseline; future additive generations must be declared explicitly.
-FEATURE_GENERATIONS = {1: frozenset({
-    "expiry_pressure", "funds_gap", "autorenew_off", "status_pressure", "payment_history", "commitment",
-})}
+FEATURE_GENERATIONS = {
+    1: frozenset({
+        "expiry_pressure", "funds_gap", "autorenew_off", "status_pressure", "payment_history", "commitment",
+    }),
+    # Поколение 2 добавляет признак «доля услуг без автопродления» с весом 0:
+    # прежние расчёты не меняются, пока вес не выставлен вручную.
+    2: frozenset({
+        "expiry_pressure", "funds_gap", "autorenew_off", "status_pressure", "payment_history", "commitment",
+        "auto_off_share",
+    }),
+}
 
 FEATURES_META = [
     {
@@ -83,6 +92,15 @@ FEATURES_META = [
         "max": 1.0,
         "step": 0.01,
         "default": 0.05,
+    },
+    {
+        "code": "auto_off_share",
+        "title": "Доля услуг без автопродления",
+        "description": "Какая часть услуг клиента идёт без автоматического продления",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01,
+        "default": 0.0,
     },
 ]
 
@@ -195,6 +213,7 @@ def _score_service(
     account: dict[str, Any],
     transactions: list[dict[str, Any]],
     account_price: int,
+    auto_off_share: float,
     now: datetime,
     settings: dict[str, Any],
 ) -> dict[str, Any] | None:
@@ -235,6 +254,7 @@ def _score_service(
         "expiry_pressure": (expiry, expiry_label),
         "funds_gap": (funds, funds_label),
         "autorenew_off": (auto, "Автопродление отключено"),
+        "auto_off_share": (auto_off_share, f"Без автопродления {round(auto_off_share * 100)}% услуг"),
         "status_pressure": (status, status_label),
         "payment_history": (history, history_label),
         "commitment": (commitment, commitment_label),
@@ -343,6 +363,11 @@ def compute(
     for account in accounts:
         owner_services = by_owner.get(account["id"], [])
         account_price = sum(int(s["price"]) for s in owner_services)
+        active_services = [s for s in owner_services if s["status"] != "deleted"]
+        auto_off_share = (
+            sum(1 for s in active_services if not s["auto_prolong"]) / len(active_services)
+            if active_services else 0.0
+        )
         available = available_cents(account, settings)
         scored: list[tuple[dict[str, Any], dict[str, Any]]] = []
         for service in owner_services:
@@ -351,6 +376,7 @@ def compute(
                 account,
                 transactions_by_service.get(service["id"], []),
                 account_price,
+                auto_off_share,
                 as_of,
                 settings,
             )
