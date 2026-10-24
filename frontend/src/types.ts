@@ -57,6 +57,16 @@ export interface Money {
   mitigation: number;
 }
 
+export interface EmailDraft {
+  situation: "prolong_wait" | "blocked" | "suspended" | "funds_gap" | "expiry_auto_off" | "unknown" | "on_track";
+  situationLabel: string;
+  subject: string;
+  body: string;
+  recipient: string;
+  serviceId: number | null;
+  serviceName: string | null;
+}
+
 export interface CustomerDetail {
   calculation: CalculationContext;
   asOf:string;
@@ -72,6 +82,8 @@ export interface CustomerDetail {
   level: Level;
   confidence: number;
   summary: string;
+  summaryDetails: string[];
+  emailDraft?: EmailDraft | null;
   drivers: Driver[];
   explanationRules?: RuleExplanation[];
   services: Service[];

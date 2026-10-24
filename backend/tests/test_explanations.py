@@ -81,7 +81,7 @@ def test_detail_contract_and_old_cache(client, config):
     login(client)
     c=client.get('/api/v1/customers/5').json()
     assert set(c) == {'id','email','balance','withdrawBalance','bonusBalance','bonusState','totalReplenished',
-        'score','level','confidence','summary','drivers','services','money','unknownReason','isEstimated','explanationRules'}
+        'score','level','confidence','summary','summaryDetails','emailDraft','drivers','services','money','unknownReason','isEstimated','explanationRules'}
     service=c['services'][0]
     assert {'values','drivers','price','createdAt','expiresAt','staleStatus','explanationRules'} <= set(service)
     assert not any(r['scope']=='service' for r in c['explanationRules'])

@@ -56,7 +56,7 @@ def test_detail_and_source_context(client):
     assert res.headers['X-Calculation-Updated-At']==view['summary']['updatedAt']
     detail=res.json()
     assert set(detail)=={'id','email','balance','withdrawBalance','bonusBalance','bonusState','totalReplenished',
-        'score','level','confidence','summary','drivers','services','money','unknownReason','isEstimated','explanationRules'}
+        'score','level','confidence','summary','summaryDetails','emailDraft','drivers','services','money','unknownReason','isEstimated','explanationRules'}
     src=client.get('/api/v1/source/snapshot')
     assert int(src.headers['X-Calculation-Run-Id'])==view['calculation']['runId']
     assert set(src.json())=={'accounts','services','transactions'}

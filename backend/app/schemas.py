@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
+from .messages import build_customer_messages
+
 SQLiteInt = Annotated[int, Field(ge=-(2**63), le=2**63 - 1)]
 MoneyCents = Annotated[int, Field(strict=True, ge=0, le=2**63 - 1,
     description='Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected.')]
@@ -193,6 +195,16 @@ class MoneyOut(APIModel):
     mitigation: FiniteFloat
 
 
+class EmailDraftOut(APIModel):
+    situation: Literal["prolong_wait", "blocked", "suspended", "funds_gap", "expiry_auto_off", "unknown", "on_track"]
+    situation_label: str
+    subject: str
+    body: str
+    recipient: str
+    service_id: SQLiteInt | None = None
+    service_name: str | None = None
+
+
 class CustomerDetailOut(APIModel):
     id: SQLiteInt
     email: str
@@ -205,6 +217,8 @@ class CustomerDetailOut(APIModel):
     level: Literal["high", "medium", "low", "unknown"]
     confidence: FiniteFloat
     summary: str
+    summary_details: list[str] = Field(default_factory=list)
+    email_draft: EmailDraftOut | None = None
     drivers: list[DriverOut]
     services: list[ServiceOut]
     money: MoneyOut
@@ -218,6 +232,9 @@ def _euros(cents: int | float) -> float:
 
 
 def detail_response(customer: dict[str, Any]) -> dict[str, Any]:
+    # Старые сохранённые записи не содержат готовых текстов — собираем их из
+    # имеющегося detail, чтобы карточка и письмо были одинаковыми для любых данных.
+    messages = build_customer_messages(customer)
     services = []
     for service in customer["services"]:
         services.append(
@@ -239,7 +256,9 @@ def detail_response(customer: dict[str, Any]) -> dict[str, Any]:
         "score": customer["score"],
         "level": customer["level"],
         "confidence": customer["confidence"],
-        "summary": customer["summaryText"],
+        "summary": messages["summaryText"],
+        "summaryDetails": messages["summaryDetails"],
+        "emailDraft": messages["emailDraft"],
         "drivers": customer["drivers"],
         "explanationRules": customer.get("explanationRules", []),
         "services": services,

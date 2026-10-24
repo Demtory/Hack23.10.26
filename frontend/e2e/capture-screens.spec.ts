@@ -39,6 +39,13 @@ test('capture all screens and states', async ({ page }) => {
   await page.waitForTimeout(600);
   await page.screenshot({ path: path.join(outDir, '04-customer-card.png'), fullPage: true });
 
+  // 4b. Email draft dialog
+  await page.getByRole('button', { name: 'Письмо клиенту' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(outDir, '10-email-dialog.png') });
+  await page.keyboard.press('Escape');
+
   // 5. Model Settings
   await page.getByRole('link', { name: 'Настройки модели', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Настройки риска' })).toBeVisible();

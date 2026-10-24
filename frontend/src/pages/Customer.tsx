@@ -1,4 +1,5 @@
 import {CalculationContext} from "../components/CalculationContext";
+import {EmailDraftDialog} from "../components/EmailDraft";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { CustomerDetail, RuleExplanation, Service } from "../types";
@@ -28,6 +29,11 @@ export function Customer({
   const [error, setError] = useState<string | null>(null);
   const [retry,setRetry]=useState(0);
   const [loading, setLoading] = useState(true);
+  const [emailOpen, setEmailOpen] = useState(false);
+
+  useEffect(() => {
+    setEmailOpen(false);
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +88,16 @@ export function Customer({
           <CalculationContext asOf={customer.asOf} updatedAt={customer.updatedAt}/>
           <p className="notice">Деньги — эвристическая оценка ближайших платежей разных услуг, не гарантированный убыток и не месячная выручка. При отсутствии оценки нулевые потери не доказывают безопасность.</p>
           {customer.score === null ? (
-            <EmptyState title="Нет оценки" text={customer.unknownReason ?? "Недостаточно данных"} />
+            <>
+              <EmptyState title="Нет оценки" text={customer.unknownReason ?? "Недостаточно данных"} />
+              {customer.emailDraft ? (
+                <div className="hero-actions">
+                  <button className="button button--primary" onClick={() => setEmailOpen(true)}>
+                    Письмо клиенту
+                  </button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               <section className="customer-hero">
@@ -106,6 +121,23 @@ export function Customer({
                 <div className="customer-hero__text">
                   <p className="eyebrow">ПОЧЕМУ РИСК</p>
                   <h2>{customer.summary}</h2>
+                  {customer.summaryDetails?.length ? (
+                    <details className="details">
+                      <summary>Подробное пояснение</summary>
+                      <ul className="details__list">
+                        {customer.summaryDetails.map((fact) => (
+                          <li key={fact}>{fact}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                  <div className="hero-actions">
+                    {customer.emailDraft ? (
+                      <button className="button button--primary" onClick={() => setEmailOpen(true)}>
+                        Письмо клиенту
+                      </button>
+                    ) : null}
+                  </div>
                   <p className="muted">
                     Экспертная оценка, не статистически подтверждённая вероятность. Баланс снижает денежную оценку,
                     но не отменяет сам риск.
@@ -154,10 +186,16 @@ export function Customer({
                     ))}
                     {customer.drivers.length === 0 ? <p className="muted">Явных взвешенных причин нет.</p> : null}
                   </div>
-                  <RuleList rules={customer.explanationRules ?? []} title="Правила клиента" />
-                  {customer.services.map((service) => (
-                    <RuleList key={service.id} rules={service.explanationRules ?? []} title={`Правила услуги ${service.name}`} />
-                  ))}
+                  {(customer.explanationRules?.length ?? 0) > 0 ||
+                  customer.services.some((service) => (service.explanationRules?.length ?? 0) > 0) ? (
+                    <details className="details details--rules">
+                      <summary>Детали расчёта</summary>
+                      <RuleList rules={customer.explanationRules ?? []} title="Правила клиента" />
+                      {customer.services.map((service) => (
+                        <RuleList key={service.id} rules={service.explanationRules ?? []} title={`Правила услуги ${service.name}`} />
+                      ))}
+                    </details>
+                  ) : null}
                 </article>
 
                 <article className="card">
@@ -228,6 +266,9 @@ export function Customer({
             </>
           )}
         </>
+      ) : null}
+      {emailOpen && customer?.emailDraft ? (
+        <EmailDraftDialog draft={customer.emailDraft} onClose={() => setEmailOpen(false)} />
       ) : null}
     </div>
   );

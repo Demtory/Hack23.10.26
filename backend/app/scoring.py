@@ -6,6 +6,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+from .messages import build_customer_messages, money_text
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "weights": {
         "expiry_pressure": 0.40,
@@ -98,7 +100,7 @@ def iso_z(value: datetime) -> str:
 
 
 def eur(cents: float) -> str:
-    return f"€{cents / 100:.2f}"
+    return money_text(cents)
 
 
 def level_for(score: float | None, thresholds: dict[str, float]) -> str:
@@ -363,33 +365,33 @@ def compute(
             else:
                 reason = "Недостаточно данных для оценки"
             counts["unknown"] += 1
-            customers.append(
-                {
-                    "id": account["id"],
-                    "email": account["email"],
-                    "balanceCents": int(account["balance"]),
-                    "withdrawCents": int(account["withdraw_balance"]),
-                    "bonusCents": int(account["bonus_balance"]),
-                    "bonusState": account["bonus_state"],
-                    "totalReplenishedCents": int(account["total_replenished"]),
-                    "score": None,
-                    "level": "unknown",
-                    "confidence": 0.0,
-                    "summaryText": reason,
-                    "drivers": [],
-                    "services": [],
-                    "money": {
-                        "amountAtRiskCents": 0,
-                        "expectedLossCents": 0,
-                        "coveredLossCents": 0,
-                        "coverage": 0.0,
-                        "mitigation": 0.0,
-                    },
-                    "explanationRules": [],
-                    "unknownReason": reason,
-                    "isEstimated": False,
-                }
-            )
+            customer = {
+                "id": account["id"],
+                "email": account["email"],
+                "balanceCents": int(account["balance"]),
+                "withdrawCents": int(account["withdraw_balance"]),
+                "bonusCents": int(account["bonus_balance"]),
+                "bonusState": account["bonus_state"],
+                "totalReplenishedCents": int(account["total_replenished"]),
+                "availableCents": available,
+                "score": None,
+                "level": "unknown",
+                "confidence": 0.0,
+                "drivers": [],
+                "services": [],
+                "money": {
+                    "amountAtRiskCents": 0,
+                    "expectedLossCents": 0,
+                    "coveredLossCents": 0,
+                    "coverage": 0.0,
+                    "mitigation": 0.0,
+                },
+                "explanationRules": [],
+                "unknownReason": reason,
+                "isEstimated": False,
+            }
+            customer.update(build_customer_messages(customer))
+            customers.append(customer)
             continue
 
         at_risk_services = sum(
@@ -439,26 +441,6 @@ def compute(
                 driver_bag.items(), key=lambda item: item[1], reverse=True
             )[:4]
         ]
-        top_service, top_result = max(scored, key=lambda pair: pair[1]["score"])
-        labels = [
-            driver["label"][0].lower() + driver["label"][1:]
-            for driver in top_result["drivers"][:2]
-        ]
-        summary_text = f"{top_service['name']}: {', '.join(labels)}" if labels else {
-            "low": "Риск ниже порога", "medium": "Средний риск", "high": "Высокий риск"
-        }[customer_level]
-        rule_labels = [rule["label"] for rule in top_result["explanationRules"] + customer_rules]
-        if rule_labels:
-            summary_text += "; " + "; ".join(rule_labels)
-        remaining = len(scored) - 1
-        if remaining > 0:
-            if remaining % 10 == 1 and remaining % 100 != 11:
-                word = "услуга"
-            elif 2 <= remaining % 10 <= 4 and not 12 <= remaining % 100 <= 14:
-                word = "услуги"
-            else:
-                word = "услуг"
-            summary_text += f"; ещё {remaining} {word}"
         confidence = round(sum(result["confidence"] for _, result in scored) / len(scored), 2)
 
         total_loss += expected_loss
@@ -468,33 +450,33 @@ def compute(
         coverage_values.append(coverage)
         if coverage < 1:
             underfunded += 1
-        customers.append(
-            {
-                "id": account["id"],
-                "email": account["email"],
-                "balanceCents": int(account["balance"]),
-                "withdrawCents": int(account["withdraw_balance"]),
-                "bonusCents": int(account["bonus_balance"]),
-                "bonusState": account["bonus_state"],
-                "totalReplenishedCents": int(account["total_replenished"]),
-                "score": round(customer_score, 1),
-                "level": customer_level,
-                "confidence": confidence,
-                "summaryText": summary_text,
-                "explanationRules": customer_rules,
-                "drivers": drivers,
-                "services": services_out,
-                "money": {
-                    "amountAtRiskCents": amount_at_risk,
-                    "expectedLossCents": expected_loss,
-                    "coveredLossCents": covered_loss,
-                    "coverage": round(coverage, 4),
-                    "mitigation": round(mitigation, 4),
-                },
-                "unknownReason": None,
-                "isEstimated": True,
-            }
-        )
+        customer = {
+            "id": account["id"],
+            "email": account["email"],
+            "balanceCents": int(account["balance"]),
+            "withdrawCents": int(account["withdraw_balance"]),
+            "bonusCents": int(account["bonus_balance"]),
+            "bonusState": account["bonus_state"],
+            "totalReplenishedCents": int(account["total_replenished"]),
+            "availableCents": available,
+            "score": round(customer_score, 1),
+            "level": customer_level,
+            "confidence": confidence,
+            "explanationRules": customer_rules,
+            "drivers": drivers,
+            "services": services_out,
+            "money": {
+                "amountAtRiskCents": amount_at_risk,
+                "expectedLossCents": expected_loss,
+                "coveredLossCents": covered_loss,
+                "coverage": round(coverage, 4),
+                "mitigation": round(mitigation, 4),
+            },
+            "unknownReason": None,
+            "isEstimated": True,
+        }
+        customer.update(build_customer_messages(customer))
+        customers.append(customer)
 
     summary = {
         "countsByLevel": counts,
