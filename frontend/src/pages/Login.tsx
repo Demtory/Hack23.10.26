@@ -25,7 +25,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <div className="login">
-      <div className="login__aside"><BrandLogo/><div className="login__pitch"><p className="eyebrow">ПАНЕЛЬ МАРКЕТОЛОГА</p><h1>Данные превращаются<br/>в приоритеты.</h1><p>Найдите клиентов, которым нужно внимание.<br/>Разберитесь в причинах риска и денежной оценке.</p></div><div className="brand-pattern" aria-hidden="true"><i/><i/><i/><b/></div><p className="login__footnote">Risk Desk · Aéza</p></div>
+      <div className="login__aside"><BrandLogo/><div className="login__pitch"><p className="eyebrow">ПАНЕЛЬ МАРКЕТОЛОГА</p><h1>Данные превращаются<br/>в приоритеты.</h1><p>Найдите клиентов, которым нужно внимание.<br/>Разберитесь в причинах риска и денежной оценке.</p></div><p className="login__footnote">Risk Desk · Aéza</p></div>
 
       <div className="login__panel">
         <form className="login__card" onSubmit={submit}>

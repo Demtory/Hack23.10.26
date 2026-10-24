@@ -214,7 +214,7 @@ export function Customer({
                         <th scope="col" className="num">Период</th>
                         <th scope="col" className="num">Авто</th>
                         <th scope="col" className="num">Истекает</th>
-                        <th scope="col" className="num">Score</th>
+                        <th scope="col" className="col-center">Score</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -259,7 +259,7 @@ function ServiceRow({ service }: { service: Service }) {
           <small>{expiry}</small>
         </div>
       </td>
-      <td className="num">
+      <td className="col-center">
         <span className={`score-chip score-chip--${service.level}`}>{Math.round(service.score)}</span>
       </td>
     </tr>

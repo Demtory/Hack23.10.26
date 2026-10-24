@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 
-const outDir = path.resolve(__dirname, '..', '..', 'docs', 'screenshots');
+const outDir = path.resolve(process.cwd(), 'docs', 'screenshots');
 
 test.beforeAll(() => {
   if (!fs.existsSync(outDir)) {
