@@ -245,6 +245,23 @@
             }
           },
           {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runid"
+            }
+          },
+          {
             "name": "pastDays",
             "in": "query",
             "required": false,
@@ -659,6 +676,18 @@
             "description": "Конец диапазона, включительно"
           },
           {
+            "name": "horizonDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Horizondays"
+            }
+          },
+          {
             "name": "kind",
             "in": "query",
             "required": false,
@@ -667,6 +696,23 @@
               "pattern": "^(fact|forecast)$",
               "default": "forecast",
               "title": "Kind"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runid"
             }
           }
         ],
@@ -742,6 +788,23 @@
               "minimum": 1,
               "default": 1,
               "title": "Bucketdays"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runid"
             }
           }
         ],
@@ -1027,6 +1090,50 @@
         ]
       }
     },
+    "/api/v1/source/events": {
+      "post": {
+        "summary": "Source Event",
+        "operationId": "source_event_api_v1_source_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceEventIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/events": {
       "get": {
         "summary": "Events",
@@ -1178,6 +1285,75 @@
           "thresholds"
         ],
         "title": "CalculationContext"
+      },
+      "CustomFactor": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^custom_[a-zA-Z0-9_]{1,48}$",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "daysToExpiry",
+              "price",
+              "balance",
+              "totalReplenished",
+              "autoProlong",
+              "status"
+            ],
+            "title": "Field"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "lt",
+              "lte",
+              "eq",
+              "gte",
+              "gt"
+            ],
+            "title": "Operator"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Value"
+          },
+          "risk": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Risk"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "title",
+          "field",
+          "operator",
+          "value",
+          "risk"
+        ],
+        "title": "CustomFactor"
       },
       "CustomerDetailOut": {
         "properties": {
@@ -1734,6 +1910,10 @@
       },
       "ForecastOut": {
         "properties": {
+          "runId": {
+            "type": "integer",
+            "title": "Runid"
+          },
           "asOf": {
             "type": "string",
             "title": "Asof"
@@ -1774,6 +1954,7 @@
         },
         "type": "object",
         "required": [
+          "runId",
           "asOf",
           "pastDays",
           "horizonDays",
@@ -2349,6 +2530,21 @@
       },
       "SettingsPatch": {
         "properties": {
+          "customFactors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CustomFactor"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customfactors"
+          },
           "expectedVersion": {
             "anyOf": [
               {
@@ -2470,6 +2666,31 @@
         ],
         "title": "SnapshotIn",
         "description": "Full replacement: all arrays and required fields must be explicit; 0/false are valid."
+      },
+      "SourceEventIn": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "autoprolong_off",
+              "topup_20",
+              "suspend_server"
+            ],
+            "title": "Action"
+          },
+          "expectedRunId": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expectedrunid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "expectedRunId"
+        ],
+        "title": "SourceEventIn"
       },
       "SummaryBase": {
         "properties": {

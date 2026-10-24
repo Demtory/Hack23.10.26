@@ -100,27 +100,28 @@ def delete_session(conn: sqlite3.Connection, token: str) -> None:
 
 
 def ensure_oidc_user(conn: sqlite3.Connection, email: str, subject: str) -> int:
-    """Автосоздание пользователя по email из подтверждённого ID token.
-
-    У SSO-пользователя нет пароля: пустая строка в password_hash не проходит
-    verify_password, поэтому вход по паролю для него закрыт.
-    """
+    """Verified issuer/subject is identity; matching email alone never links accounts."""
+    from .db import transaction
     normalized = email.strip().lower()
     if not normalized:
         raise ValueError("email is required")
-    row = conn.execute(
-        "SELECT id, oidc_subject FROM users WHERE email = ?", (normalized,)
-    ).fetchone()
-    if row is not None:
-        if row["oidc_subject"] != subject:
-            conn.execute(
-                "UPDATE users SET oidc_subject = ? WHERE id = ?", (subject, row["id"])
-            )
-            conn.commit()
-        return int(row["id"])
-    cursor = conn.execute(
-        "INSERT INTO users (email, password_hash, oidc_subject, created_at) VALUES (?, '', ?, ?)",
-        (normalized, subject, iso_z(utcnow())),
-    )
-    conn.commit()
-    return int(cursor.lastrowid)
+    with transaction(conn):
+        identity = conn.execute(
+            "SELECT id, email FROM users WHERE oidc_subject = ?", (subject,)
+        ).fetchone()
+        email_owner = conn.execute(
+            "SELECT id, oidc_subject FROM users WHERE email = ?", (normalized,)
+        ).fetchone()
+        if identity is not None:
+            if email_owner is not None and email_owner['id'] != identity['id']:
+                raise ValueError("Email belongs to another account")
+            if identity['email'] != normalized:
+                conn.execute("UPDATE users SET email=? WHERE id=?", (normalized, identity['id']))
+            return int(identity['id'])
+        if email_owner is not None:
+            raise ValueError("Account linking requires administrator approval")
+        cursor = conn.execute(
+            "INSERT INTO users (email, password_hash, oidc_subject, created_at) VALUES (?, '', ?, ?)",
+            (normalized, subject, iso_z(utcnow())),
+        )
+        return int(cursor.lastrowid)

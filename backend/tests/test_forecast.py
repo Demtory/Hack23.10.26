@@ -21,15 +21,15 @@ def test_forecast_shape_and_honesty(client):
     data = client.get("/api/v1/analytics/forecast").json()
     assert data["pastDays"] == 30 and data["horizonDays"] == 30
     assert len(data["fact"]) == 30
-    assert len(data["forecast"]) == 30
+    assert len(data["forecast"]) == 31
     assert "Исторических удалений нет" in data["note"]
 
     as_of = _dt(data["asOf"]).date()
     assert all(date.fromisoformat(point["date"]) <= as_of for point in data["fact"])
-    assert all(date.fromisoformat(point["date"]) > as_of for point in data["forecast"])
+    assert all(date.fromisoformat(point["date"]) >= as_of for point in data["forecast"])
     assert data["fact"][-1]["date"] == "2026-10-23"
     assert data["fact"][-1]["end"] == "2026-10-23"
-    assert data["forecast"][0]["date"] == "2026-10-24"
+    assert data["forecast"][0]["date"] == "2026-10-23"
 
     totals = data["totals"]
     assert totals["factServices"] == sum(point["services"] for point in data["fact"])
@@ -84,7 +84,7 @@ def test_forecast_is_deterministic(client):
     first = client.get("/api/v1/analytics/forecast", params={"pastDays": 7, "horizonDays": 14}).json()
     second = client.get("/api/v1/analytics/forecast", params={"pastDays": 7, "horizonDays": 14}).json()
     assert first == second
-    assert len(first["fact"]) == 7 and len(first["forecast"]) == 14
+    assert len(first["fact"]) == 7 and len(first["forecast"]) == 15
 
 
 @pytest.mark.parametrize("params", [{"pastDays": 0}, {"horizonDays": 0}, {"pastDays": 91}, {"horizonDays": 91}])

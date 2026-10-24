@@ -1,3 +1,4 @@
+import {CustomFactorEditor} from '../components/CustomFactorEditor';
 import {useDraft} from "../state/SettingsDraft";
 import {Dialog} from "../components/ui";
 import {CalculationContext} from "../components/CalculationContext";
@@ -14,32 +15,32 @@ const DEFAULTS = {
 
 const FEATURE_EXPLANATIONS: Record<string, { guide: string; impact: string }> = {
   expiry_pressure: {
-    guide: "Близость expiresAt к дате среза с учётом срока оплаты и доступного баланса.",
-    impact: "Вес определяет долю фактора срочности в базовой оценке услуги.",
+    guide: "Сколько времени осталось до окончания оплаченного периода. Автопродление снижает срочность, только если на основном и доступном бонусном балансе хватает на платёж.",
+    impact: "Настройка определяет долю фактора срочности в базовой оценке услуги.",
   },
   funds_gap: {
     guide: "Баланс сравнивается с ценой одной оцениваемой услуги, без распределения между услугами. При нехватке фактор равен 1; иначе max(0, 0.3 × (1 − баланс / (3 × цена))). При нулевой цене фактор неизвестен.",
-    impact: "Больший вес усиливает влияние нехватки денег в базовой оценке.",
+    impact: "Большее влияние усиливает влияние нехватки денег в базовой оценке.",
   },
   autorenew_off: {
-    guide: "autoProlong=false даёт 1, true даёт 0. Флаг не доказывает намерение клиента уйти.",
-    impact: "Вес определяет влияние отключённого автопродления.",
+    guide: "Отключено — 1, включено — 0. Сам по себе этот факт не означает, что клиент собирается уйти.",
+    impact: "Настройка определяет влияние отключённого автопродления.",
   },
   status_pressure: {
-    guide: "prolong_wait: 1; blocked: 0.9; suspended: 0.7; active: 0. Устаревший статус учитывается отдельно. suspended означает выключенную, но оплачиваемую услугу.",
+    guide: "Ожидает оплаты — 1; заблокирована — 0,9; выключена, но оплачивается — 0,7; работает — 0. Если срок уже истёк, а статус не обновлён — 1.",
     impact: "Кроме взвешенного фактора действуют отдельные минимумы по статусам, даже при весе 0.",
   },
   payment_history: {
-    guide: "Наличие хотя бы одного not_performed prolong даёт 1, иначе not_performed order даёт 0.6, иначе 0. Без транзакций фактор неизвестен.",
+    guide: "Есть неоплаченное продление — 1; только неоплаченный заказ — 0,6; все счета оплачены — 0. Если платежей нет в данных, значение неизвестно.",
     impact: "Оценивается наличие неоплаты, а не её частота или доля транзакций.",
   },
   commitment: {
-    guide: "1 − min(1, totalReplenished / (3 × сумма цен всех услуг аккаунта)). При нулевой сумме цен фактор неизвестен.",
-    impact: "Большие пополнения уменьшают этот эвристический фактор; это не доказанная лояльность клиента.",
+    guide: "Чем меньше клиент пополнил относительно стоимости его услуг, тем выше значение. Формула: 1 − min(1, сумма пополнений / (3 × стоимость всех услуг)). При нулевой стоимости значение неизвестно.",
+    impact: "Чем больше пополнено, тем ниже значение. Это косвенный показатель, а не доказательство лояльности.",
   },
   auto_off_share: {
     guide: "Доля неудалённых услуг аккаунта без автопродления: 0 — включено везде, 1 — ни у одной услуги. Считается по клиенту, а не по одной услуге.",
-    impact: "Вес 0 отключает вклад признака; по умолчанию 0, чтобы не менять прежние оценки. Отличается от autorenew_off: тот про конкретную услугу, этот — про привычку клиента.",
+    impact: "Влияние 0 отключает фактор; по умолчанию 0, чтобы не менять прежние оценки. Отличается от autorenew_off: тот про конкретную услугу, этот — про привычку клиента.",
   },
 };
 
@@ -60,7 +61,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
   function applyPreset(preset: WeightPreset) {
     if (!draft) return;
     setDraft({ ...draft, weights: { ...draft.weights, ...preset.weights } });
-    setPresetStatus(`Применён набор «${preset.name}»: веса в черновике. Нажмите «Сохранить» вверху страницы, чтобы применить.`);
+    setPresetStatus(`Применён набор «${preset.name}»: настройки в черновике. Нажмите «Сохранить» вверху страницы, чтобы применить.`);
     setPresetError(null);
   }
 
@@ -69,7 +70,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
     setSavingPreset(true);
     setPresetError(null);
     try {
-      const created = await api.createPreset(presetName.trim(), draft.weights);
+      const created = await api.createPreset(presetName.trim(), Object.fromEntries(Object.entries(draft.weights).filter(([code])=>!code.startsWith("custom_"))));
       setPresets((current) => [...current, created]);
       setPresetStatus(`Набор «${created.name}» сохранён.`);
       setSaveOpen(false);
@@ -127,7 +128,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
             <h1>Настройки</h1>
           </div>
         </header>
-        {error ? <ErrorBox message={error} onRetry={()=>void model.load()} /> : <Spinner label="Загружаем коэффициенты" />}
+        {error ? <ErrorBox message={error} onRetry={()=>void model.load()} /> : <Spinner label="Загружаем настройки" />}
       </div>
     );
   }
@@ -139,7 +140,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
           <p className="eyebrow">МОДЕЛЬ · ВЕРСИЯ {draft.version}</p>
           <h1>Настройки риска</h1>
           <p className="page__subtitle">
-            Веса нормируются при расчёте: можно ставить 0, чтобы отключить признак. Изменения применяются и сохраняются только после нажатия «Сохранить».
+            Выберите, какие факторы влияют на риск и насколько сильно. Изменения начнут действовать после сохранения и пересчёта.
           </p>
         </div>
         <div className="settings-actions">
@@ -159,24 +160,23 @@ export function Settings({ liveTick }: { liveTick: number }) {
       <div className="card">
         <div>
           <div>
-            <h3>Как рассчитывается итоговый Risk-Score</h3>
-            <p className="muted">
-              Сумма сырых весов: <strong>{weightSum.toFixed(2)}</strong>. Модель производит автоматическую нормировку: доля фактора равна весу, делённому на сумму весов, а вклад учитывает и значение фактора. Сумма 1.00 не обязательна. Неизвестное значение заменяется на 0.5; при недостаточной полноте данных оценка отсутствует.
-            </p>
+            <h3>Как работают настройки</h3>
+            <p className="muted">Чем больше влияние фактора относительно остальных, тем сильнее он меняет базовую оценку услуги. Сумму не нужно подгонять к 1. Поставьте 0 или выключите фактор, чтобы исключить его вклад.</p>
+            <p className="muted">Это не отключает отдельные правила по статусам и добавку за несколько услуг. Поэтому место клиента в рейтинге может остаться прежним.</p>
+            <details><summary>Формула и неизвестные значения</summary><p>База услуги = 100 × сумма (влияние × значение фактора) / сумма влияний. Значение фактора — от 0 до 1. Неизвестное значение учитывается как 0,5; если известных данных меньше половины по влиянию, оценка не показывается.</p></details>
           </div>
           <div>
-            База услуги = 100 × Σ(вес_i × фактор_i) / Σ(весов)
+
           </div>
         </div>
       </div>
 
-      
+
 
       <p className="muted">
-        После базовой оценки действуют сохранённые минимумы prolong_wait ({draft.statusFloors.prolong_wait}),
-        blocked ({draft.statusFloors.blocked}) и устаревшего статуса ({draft.statusFloors.stale}).
-        Вес 0 их не отключает. Оценка клиента — максимум оценённых услуг плюс 4 балла за каждую
-        дополнительную услугу от среднего порога; итог ограничен 100. Доли весов относятся к базе услуги.
+        Отдельные правила: услуга ожидает оплаты — минимум {draft.statusFloors.prolong_wait} баллов;
+        заблокирована — {draft.statusFloors.blocked}; статус не соответствует сроку — {draft.statusFloors.stale}.
+        Для клиента берётся самая высокая оценка услуги. За каждую дополнительную услугу со средним или высоким риском добавляется 4 балла, максимум — 100.
       </p>
       {model.state==='conflict'||model.state==='uncertain'?<button className="button" onClick={()=>setDiscardPrompt(true)}>Загрузить текущую версию</button>:null}
       <div className="settings-layout">
@@ -185,12 +185,12 @@ export function Settings({ liveTick }: { liveTick: number }) {
             <div className="card__heading">
               <div>
                 <p className="card__label">Готовые настройки</p>
-                <h2>Наборы весов</h2>
+                <h2>Готовые наборы влияния</h2>
               </div>
               <button className="button" onClick={()=>setSaveOpen(true)} disabled={!draft}>Сохранить как новый набор</button>
             </div>
             <p className="muted">
-              Набор меняет только веса признаков. Он заполняет черновик — результаты пересчитаются
+              Набор меняет влияние встроенных факторов. Собственные факторы сохраняются. Он заполняет черновик — результаты пересчитаются
               после «Сохранить». Пороги, минимумы и денежные правила остаются как есть.
             </p>
             <div className="presets">
@@ -209,19 +209,20 @@ export function Settings({ liveTick }: { liveTick: number }) {
             {presetStatus ? (
               <div className="preset__status-row">
                 <p className="preset__status" role="status">{presetStatus}</p>
-                
+
               </div>
             ) : null}
             {presetError ? <p className="form-error">{presetError}</p> : null}
           </section>
 
+          <CustomFactorEditor draft={draft} onChange={setDraft}/>
           <section className="card">
             <div className="card__heading">
               <div>
-                <p className="card__label">Коэффициенты</p>
-                <h2>Веса признаков</h2>
+                <p className="card__label">Настройка влияния</p>
+                <h2>Факторы риска</h2>
               </div>
-              <span className="card__meta">сумма весов: {weightSum.toFixed(2)} (нормируются автоматически)</span>
+              <span className="card__meta">Доли рассчитываются автоматически</span>
             </div>
             <div className="weights">
               {draft.features.map((feature) => {
@@ -234,18 +235,20 @@ export function Settings({ liveTick }: { liveTick: number }) {
                       <div>
                         <div className="weight-row__title">
                           <strong>{feature.title}</strong>
-                          <span>доля в модели: {sharePercent}%</span>
+                          <span>доля в базовой оценке: {sharePercent}%</span>
                         </div>
                         <p>{feature.description}</p>
                         {info && (
-                          <div>
-                            <div><em>Суть шкалы:</em> {info.guide}</div>
+                          <details>
+                            <summary>Как оценивается фактор</summary>
+                            <div><em>Правило:</em> {info.guide}</div>
                             <div><em>Влияние:</em> {info.impact}</div>
-                          </div>
+                          </details>
                         )}
                       </div>
                       <span className="weight-row__value">{rawVal.toFixed(2)}</span>
                     </div>
+                    <label className="checkbox"><input type="checkbox" aria-label={`Включить: ${feature.title}`} checked={rawVal>0} onChange={e=>setWeight(feature.code,e.target.checked?(feature.default||.1):0)}/> {rawVal>0?'Включён':'Выключен · не влияет на базовую оценку'}</label>
                     <div className="weight-row__controls">
                       <input
                         type="range"
@@ -356,7 +359,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
                   })
                 }
               />
-              Учитывать реферальный баланс как доступные деньги
+              Учитывать реферальный баланс в денежной оценке (для оплаты потребуется ручной перевод)
             </label>
           </section>
         </div>
@@ -385,7 +388,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
                   <strong>{summary.countsByLevel.unknown}</strong>
                 </div>
                 <div className="mini-stat">
-                  <span>Средний score</span>
+                  <span>Средняя оценка риска</span>
                   <strong>{summary.avgScore ?? "—"}</strong>
                 </div>
               </>
@@ -393,7 +396,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
               <Spinner label="Сводка" />
             )}
             <p className="settings-aside__note">
-              Сохранение запускает пересчёт на сервере. Черновик до сохранения не влияет на результаты. Панель обновится по SSE или резервному опросу.
+              После сохранения оценки пересчитаются. Пока вы редактируете черновик, в панели остаются прежние результаты.
             </p>
           </div>
         </aside>
@@ -401,8 +404,8 @@ export function Settings({ liveTick }: { liveTick: number }) {
       </fieldset>
       <CalculationContext asOf={summary?.asOf} updatedAt={summary?.updatedAt}/>
       {saveOpen ? (
-        <Dialog title="Сохранить набор весов" onCancel={()=>{setSaveOpen(false);setPresetName("");}}>
-          <p>Текущие веса черновика сохранятся как именованный набор. Пороги и денежные правила в набор не входят.</p>
+        <Dialog title="Сохранить набор влияния" onCancel={()=>{setSaveOpen(false);setPresetName("");}}>
+          <p>Сохранятся настройки влияния встроенных факторов. Собственные правила, пороги и денежные настройки в набор не входят.</p>
           <label className="field">
             <span>Название набора</span>
             <input value={presetName} maxLength={40} autoFocus onChange={(event)=>setPresetName(event.target.value)} placeholder="Например, «Кампания по пополнениям»" />

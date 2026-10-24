@@ -287,7 +287,7 @@ def test_oidc_login_creates_user_and_session(oidc_client, oidc_config, idp):
             "SELECT email, password_hash, oidc_subject FROM users WHERE email = ?",
             ("marketer@example.test",),
         ).fetchall()
-    assert row == [("marketer@example.test", "", "sso-user-1")]
+    assert row == [("marketer@example.test", "", idp.issuer + "|sso-user-1")]
 
 
 def test_password_login_still_works(oidc_client, oidc_config):
@@ -393,3 +393,65 @@ def test_provider_unavailable_is_soft_failure(oidc_client, idp):
     response = oidc_client.get("/api/v1/auth/oidc/start", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/#/login?sso_error=provider_unavailable"
+
+
+def test_flow_is_bound_to_initiating_browser(oidc_client, oidc_config, idp):
+    _, params = start_flow(oidc_client)
+    with TestClient(create_app(oidc_config)) as other:
+        rejected = finish(other, idp, params['state'][0])
+        assert rejected.headers['location'].endswith('state_invalid')
+        assert other.get('/api/v1/auth/me').status_code == 401
+    # An attack must not consume the legitimate browser's flow.
+    idp.token_claims_override = {'iss':idp.issuer,'aud':'risk-desk','sub':'bound',
+        'email':'bound@example.test','email_verified':True,'nonce':params['nonce'][0],
+        'iat':int(time.time()),'exp':int(time.time())+300}
+    assert finish(oidc_client,idp,params['state'][0]).headers['location']=='/#/'
+
+
+def test_missing_verified_email_rejected(oidc_client,idp):
+    _, params = start_flow(oidc_client)
+    idp.token_claims_override = {'iss':idp.issuer,'aud':'risk-desk','sub':'unverified',
+        'email':'not-verified@example.test','nonce':params['nonce'][0],
+        'iat':int(time.time()),'exp':int(time.time())+300}
+    assert finish(oidc_client,idp,params['state'][0]).headers['location'].endswith('email_unverified')
+    assert oidc_client.get('/api/v1/auth/me').status_code == 401
+
+
+def test_oidc_cannot_take_over_existing_password_account(oidc_client,idp):
+    _, params = start_flow(oidc_client)
+    idp.token_claims_override = {'iss':idp.issuer,'aud':'risk-desk','sub':'another-subject',
+        'email':'admin@example.test','email_verified':True,'nonce':params['nonce'][0],
+        'iat':int(time.time()),'exp':int(time.time())+300}
+    assert finish(oidc_client,idp,params['state'][0]).headers['location'].endswith('account_conflict')
+    assert oidc_client.post('/api/v1/auth/login',json={'email':'admin@example.test','password':'admin123'}).status_code==200
+
+
+def test_concurrent_callbacks_consume_state_once(oidc_client, idp):
+    from concurrent.futures import ThreadPoolExecutor
+    _, params=start_flow(oidc_client)
+    idp.token_claims_override={'iss':idp.issuer,'aud':'risk-desk','sub':'once',
+        'email':'once@example.test','email_verified':True,'nonce':params['nonce'][0],
+        'iat':int(time.time()),'exp':int(time.time())+300}
+    # Pass the initiating proof explicitly so cookie deletion by one response cannot
+    # hide a server-side replay defect in the concurrent second request.
+    cookie={'Cookie':'oidc_flow='+params['state'][0]}
+    def callback(_):
+        return oidc_client.get('/api/v1/auth/oidc/callback',params={'state':params['state'][0],'code':'test-code'},headers=cookie,follow_redirects=False)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        locations=[r.headers['location'] for r in pool.map(callback,range(2))]
+    assert sorted(locations)==sorted(['/#/','/#/login?sso_error=state_invalid'])
+
+
+def test_same_oidc_identity_can_update_verified_email_without_linking_other_users(oidc_client, oidc_config):
+    from app.db import connect
+    from app.security import ensure_oidc_user
+    conn=connect(oidc_config.db_path)
+    try:
+        subject=oidc_config.oidc_issuer+'|stable-id'
+        original=ensure_oidc_user(conn,'first@example.test',subject)
+        assert ensure_oidc_user(conn,'second@example.test',subject)==original
+        with pytest.raises(ValueError):
+            ensure_oidc_user(conn,'admin@example.test',subject)
+        assert conn.execute('SELECT email FROM users WHERE id=?',(original,)).fetchone()['email']=='second@example.test'
+    finally:
+        conn.close()
