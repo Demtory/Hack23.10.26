@@ -206,9 +206,10 @@ $$\text{Expected Loss} = \sum_{s \in \text{Services}} P(\text{score}_s) \times \
 - Индивидуальная детализация по каждой подключенной услуге (статус, автопродление, дата списания, цена, вклад в риск).
 - **Кнопка «Письмо клиенту»:** Генератор персонализированного черновика email-сообщения. В зависимости от проблемы (`prolong_wait`, нехватка баланса, отключенное автопродление) автоматически генерируется корректная тема и текст письма с подстановкой имени услуги и суммы. Доступно копирование в буфер и переход в `mailto:`.
 
-| Карточка клиента | Готовый черновик письма маркетолога |
-|---|---|
-| ![Карточка клиента](docs/screenshots/04-customer-card.png) | ![Письмо клиенту](docs/screenshots/10-email-dialog.png) |
+Карточка клиента
+![Карточка клиента](docs/screenshots/04-customer-card.png)
+Готовый черновик письма маркетолога
+![Письмо клиенту](docs/screenshots/10-email-dialog.png)
 
 ---
 
@@ -251,9 +252,10 @@ $$\text{Expected Loss} = \sum_{s \in \text{Services}} P(\text{score}_s) \times \
 - Поддержка стандартного входа по логину и паролю.
 - Полноценная поддержка OIDC (OpenID Connect) Authorization Code Flow с PKCE через Keycloak.
 
-| Экран входа по паролю | Вход через корпоративный Keycloak SSO |
-|---|---|
-| ![Вход](docs/screenshots/01-login.png) | ![Вход через SSO](docs/screenshots/11-login-sso.png) |
+Экран входа по паролю
+![Вход](docs/screenshots/01-login.png)
+Вход через корпоративный Keycloak SSO
+![Вход через SSO](docs/screenshots/11-login-sso.png)
 
 ---
 
@@ -262,9 +264,10 @@ $$\text{Expected Loss} = \sum_{s \in \text{Services}} P(\text{score}_s) \times \
 - Полноценная поддержка планшетов (768px) с выпадающим меню-дровером.
 - Удобная работа с мобильных телефонов (360px).
 
-| Планшет (768px) | Мобильный интерфейс (360px) |
-|---|---|
-| ![Планшет](docs/screenshots/07-tablet-768.png) | ![Мобильный экран](docs/screenshots/09-mobile-360.png) |
+Планшет (768px)
+![Планшет](docs/screenshots/07-tablet-768.png)
+Мобильный интерфейс (360px)
+![Мобильный экран](docs/screenshots/09-mobile-360.png)
 
 ---
 
