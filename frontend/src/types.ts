@@ -167,6 +167,7 @@ export interface User {
 
 export interface ForecastPoint {
   date: string;
+  end: string;
   services: number;
   expectedNonRenewals: number;
   expectedLoss: number;
@@ -174,6 +175,7 @@ export interface ForecastPoint {
 
 export interface ForecastFactPoint {
   date: string;
+  end: string;
   services: number;
   customers: number;
 }
@@ -194,4 +196,30 @@ export interface Forecast {
     expectedLoss: number;
   };
   note: string;
+}
+
+export interface ForecastDayItem {
+  serviceId: number;
+  serviceName: string;
+  customerId: number;
+  email: string;
+  price: number;
+  score: number;
+  level: Level;
+  status: string;
+  expiresAt: string;
+  probability?: number | null;
+  expectedLoss?: number | null;
+}
+
+export interface ForecastDay {
+  date: string;
+  end: string;
+  kind: "fact" | "forecast";
+  services: number;
+  customers: number;
+  expectedNonRenewals: number;
+  expectedLoss: number;
+  items: ForecastDayItem[];
+  truncated: boolean;
 }

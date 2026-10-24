@@ -19,8 +19,8 @@ from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredenti
 from . import oidc
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
-from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, detail_response
-from .forecast import build_forecast
+from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, ForecastDayOut, detail_response
+from .forecast import build_forecast, range_details
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -467,13 +467,55 @@ def analytics_summary(
     return _summary_api(_ensure_summary(conn, config))
 
 
-_FORECAST_CACHE: dict[tuple[str, int, int, int], dict[str, Any]] = {}
+_FORECAST_CACHE: dict[tuple[str, int, int, int, int], dict[str, Any]] = {}
+
+
+@router.get("/analytics/forecast/day", response_model=ForecastDayOut)
+def analytics_forecast_day(
+    date: str = Query(..., description="Начало диапазона, YYYY-MM-DD"),
+    end: str | None = Query(None, description="Конец диапазона, включительно"),
+    kind: str = Query("forecast", pattern="^(fact|forecast)$"),
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    """Услуги одного дня: факт истечений или прогноз непродлений."""
+    try:
+        target = datetime.fromisoformat(date).date()
+        target_end = datetime.fromisoformat(end).date() if end else target
+    except ValueError:
+        raise HTTPException(status_code=422, detail="date must be YYYY-MM-DD")
+    if target_end < target:
+        raise HTTPException(status_code=422, detail="end must be after date")
+    summary = _ensure_summary(conn, config)
+    as_of_date = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00")).date()
+    if kind == "fact" and target_end > as_of_date:
+        raise HTTPException(status_code=422, detail="fact date is after the snapshot")
+    if kind == "forecast" and target <= as_of_date:
+        raise HTTPException(status_code=422, detail="forecast date is not in the future")
+
+    with read_transaction(conn):
+        settings, _version, _updated = get_settings(conn)
+        details = latest_details(conn)
+    data = range_details(details, datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00")),
+                         date, target_end.isoformat(), kind, settings)
+    data["expectedLoss"] = euros(data.pop("expectedLossCents"))
+    data["items"] = [
+        {
+            **item,
+            "price": euros(item.pop("priceCents")),
+            "expectedLoss": None if item["expectedLossCents"] is None else euros(item.pop("expectedLossCents")),
+        }
+        for item in data["items"]
+    ]
+    return data
 
 
 @router.get("/analytics/forecast", response_model=ForecastOut)
 def analytics_forecast(
     past_days: int = Query(30, ge=1, le=90, alias="pastDays"),
     horizon_days: int = Query(30, ge=1, le=90, alias="horizonDays"),
+    bucket_days: int = Query(1, ge=1, le=30, alias="bucketDays"),
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
@@ -481,7 +523,7 @@ def analytics_forecast(
     """Факт истечений и прогноз непродлений по срокам оплаты."""
     summary = _ensure_summary(conn, config)
     run = latest_run(conn)
-    cache_key = (str(config.db_path), int(run["id"]) if run else 0, past_days, horizon_days)
+    cache_key = (str(config.db_path), int(run["id"]) if run else 0, past_days, horizon_days, bucket_days)
     cached = _FORECAST_CACHE.get(cache_key)
     if cached is not None:
         return cached
@@ -489,10 +531,11 @@ def analytics_forecast(
         settings, _version, _updated = get_settings(conn)
         details = latest_details(conn)
     as_of = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00"))
-    data = build_forecast(details, as_of, settings, past_days, horizon_days)
+    data = build_forecast(details, as_of, settings, past_days, horizon_days, bucket_days)
     data["forecast"] = [
         {
             "date": point["date"],
+            "end": point["end"],
             "services": point["services"],
             "expectedNonRenewals": point["expectedNonRenewals"],
             "expectedLoss": euros(point["expectedLossCents"]),

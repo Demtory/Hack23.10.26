@@ -540,6 +540,85 @@
         ]
       }
     },
+    "/api/v1/analytics/forecast/day": {
+      "get": {
+        "summary": "Analytics Forecast Day",
+        "description": "Услуги одного дня: факт истечений или прогноз непродлений.",
+        "operationId": "analytics_forecast_day_api_v1_analytics_forecast_day_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Начало диапазона, YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "Начало диапазона, YYYY-MM-DD"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Конец диапазона, включительно",
+              "title": "End"
+            },
+            "description": "Конец диапазона, включительно"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(fact|forecast)$",
+              "default": "forecast",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastDayOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/analytics/forecast": {
       "get": {
         "summary": "Analytics Forecast",
@@ -576,6 +655,18 @@
               "minimum": 1,
               "default": 30,
               "title": "Horizondays"
+            }
+          },
+          {
+            "name": "bucketDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "default": 1,
+              "title": "Bucketdays"
             }
           }
         ],
@@ -1283,11 +1374,160 @@
         ],
         "title": "EmailDraftOut"
       },
+      "ForecastDayItem": {
+        "properties": {
+          "serviceId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Serviceid"
+          },
+          "serviceName": {
+            "type": "string",
+            "title": "Servicename"
+          },
+          "customerId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Customerid"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ],
+            "title": "Level"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "expiresAt": {
+            "type": "string",
+            "title": "Expiresat"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "expectedLoss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedloss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "serviceId",
+          "serviceName",
+          "customerId",
+          "email",
+          "price",
+          "score",
+          "level",
+          "status",
+          "expiresAt"
+        ],
+        "title": "ForecastDayItem"
+      },
+      "ForecastDayOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fact",
+              "forecast"
+            ],
+            "title": "Kind"
+          },
+          "services": {
+            "type": "integer",
+            "title": "Services"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "expectedNonRenewals": {
+            "type": "number",
+            "title": "Expectednonrenewals"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastDayItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "end",
+          "kind",
+          "services",
+          "customers",
+          "expectedNonRenewals",
+          "expectedLoss",
+          "items",
+          "truncated"
+        ],
+        "title": "ForecastDayOut"
+      },
       "ForecastFactPoint": {
         "properties": {
           "date": {
             "type": "string",
             "title": "Date"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
           },
           "services": {
             "type": "integer",
@@ -1301,6 +1541,7 @@
         "type": "object",
         "required": [
           "date",
+          "end",
           "services",
           "customers"
         ],
@@ -1365,6 +1606,10 @@
             "type": "string",
             "title": "Date"
           },
+          "end": {
+            "type": "string",
+            "title": "End"
+          },
           "services": {
             "type": "integer",
             "title": "Services"
@@ -1381,6 +1626,7 @@
         "type": "object",
         "required": [
           "date",
+          "end",
           "services",
           "expectedNonRenewals",
           "expectedLoss"

@@ -26,6 +26,7 @@ def test_forecast_shape_and_honesty(client):
     assert all(date.fromisoformat(point["date"]) <= as_of for point in data["fact"])
     assert all(date.fromisoformat(point["date"]) > as_of for point in data["forecast"])
     assert data["fact"][-1]["date"] == "2026-10-23"
+    assert data["fact"][-1]["end"] == "2026-10-23"
     assert data["forecast"][0]["date"] == "2026-10-24"
 
     totals = data["totals"]
@@ -88,3 +89,74 @@ def test_forecast_is_deterministic(client):
 def test_forecast_rejects_bad_windows(client, params):
     login(client)
     assert client.get("/api/v1/analytics/forecast", params=params).status_code == 422
+
+
+def test_forecast_day_returns_services(client):
+    login(client)
+    overview = client.get("/api/v1/analytics/forecast").json()
+    fact_day = next(point for point in overview["fact"] if point["services"])
+    day = client.get(
+        "/api/v1/analytics/forecast/day", params={"date": fact_day["date"], "kind": "fact"}
+    ).json()
+    assert day["kind"] == "fact"
+    assert day["services"] == fact_day["services"]
+    assert len(day["items"]) == min(day["services"], 200)
+    item = day["items"][0]
+    assert item["serviceName"] and item["email"]
+    assert item["price"] >= 0
+    assert "expectedLoss" not in item or item["expectedLoss"] is None
+
+
+def test_forecast_day_forecast_has_probability_and_money(client):
+    login(client)
+    overview = client.get("/api/v1/analytics/forecast").json()
+    point = next(point for point in overview["forecast"] if point["services"])
+    day = client.get(
+        "/api/v1/analytics/forecast/day", params={"date": point["date"], "kind": "forecast"}
+    ).json()
+    assert day["services"] == point["services"]
+    assert day["expectedNonRenewals"] == pytest.approx(point["expectedNonRenewals"], abs=0.01)
+    assert day["expectedLoss"] == pytest.approx(point["expectedLoss"], abs=0.02)
+    first = day["items"][0]
+    assert 0 < first["probability"] <= 1
+    assert first["expectedLoss"] is not None
+
+
+def test_forecast_day_validates_date_and_kind(client):
+    login(client)
+    assert client.get("/api/v1/analytics/forecast/day", params={"date": "not-a-date"}).status_code == 422
+    assert client.get("/api/v1/analytics/forecast/day", params={"date": "2026-10-25", "kind": "fact"}).status_code == 422
+    assert client.get("/api/v1/analytics/forecast/day", params={"date": "2026-10-20", "kind": "forecast"}).status_code == 422
+    assert client.get("/api/v1/analytics/forecast/day", params={"date": "2026-10-25", "kind": "other"}).status_code == 422
+
+
+def test_forecast_weekly_buckets(client):
+    login(client)
+    data = client.get("/api/v1/analytics/forecast", params={"bucketDays": 7}).json()
+    assert len(data["fact"]) == 5
+    assert len(data["forecast"]) == 5
+    for point in data["fact"] + data["forecast"]:
+        assert point["date"] <= point["end"]
+    assert data["fact"][-1]["end"] == "2026-10-23"
+    daily = client.get("/api/v1/analytics/forecast").json()
+    assert data["totals"]["factServices"] == daily["totals"]["factServices"]
+    assert data["totals"]["expectedLoss"] == pytest.approx(daily["totals"]["expectedLoss"], abs=0.02)
+
+
+def test_forecast_bucket_day_range(client):
+    login(client)
+    weekly = client.get("/api/v1/analytics/forecast", params={"bucketDays": 7}).json()
+    bucket = next(point for point in weekly["forecast"] if point["services"])
+    response = client.get(
+        "/api/v1/analytics/forecast/day",
+        params={"date": bucket["date"], "end": bucket["end"], "kind": "forecast"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["date"] == bucket["date"] and data["end"] == bucket["end"]
+    assert data["services"] == bucket["services"]
+    assert data["expectedLoss"] == pytest.approx(bucket["expectedLoss"], abs=0.02)
+    assert client.get(
+        "/api/v1/analytics/forecast/day",
+        params={"date": bucket["end"], "end": bucket["date"]},
+    ).status_code == 422

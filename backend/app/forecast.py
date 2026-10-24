@@ -34,6 +34,7 @@ def build_forecast(
     settings: dict[str, Any],
     past_days: int = 30,
     horizon_days: int = 30,
+    bucket_days: int = 1,
 ) -> dict[str, Any]:
     start = as_of - timedelta(days=past_days)
     end = as_of + timedelta(days=horizon_days)
@@ -73,19 +74,8 @@ def build_forecast(
             if service.get("level") in ("high", "medium"):
                 services_at_risk += 1
 
-    fact_points = [
-        {"date": key, "services": value["services"], "customers": len(value["customers"])}
-        for key, value in sorted(fact.items())
-    ]
-    forecast_points = [
-        {
-            "date": key,
-            "services": value["services"],
-            "expectedNonRenewals": round(value["expected"], 2),
-            "expectedLossCents": int(value["loss"]),
-        }
-        for key, value in sorted(forecast.items())
-    ]
+    fact_points = _bucketize_fact(fact, bucket_days)
+    forecast_points = _bucketize_forecast(forecast, bucket_days)
     return {
         "asOf": as_of.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "pastDays": past_days,
@@ -102,4 +92,118 @@ def build_forecast(
             "expectedLossCents": sum(point["expectedLossCents"] for point in forecast_points),
         },
         "note": NOTE,
+    }
+
+
+def _chunks(keys: list[str], size: int) -> list[list[str]]:
+    return [keys[index:index + size] for index in range(0, len(keys), size)]
+
+
+def _bucketize_fact(points: dict[str, dict[str, Any]], size: int) -> list[dict[str, Any]]:
+    keys = sorted(points)
+    result = []
+    for chunk in _chunks(keys, max(1, size)):
+        customers: set[int] = set()
+        for key in chunk:
+            customers |= points[key]["customers"]
+        result.append(
+            {
+                "date": chunk[0],
+                "end": chunk[-1],
+                "services": sum(points[key]["services"] for key in chunk),
+                "customers": len(customers),
+            }
+        )
+    return result
+
+
+def _bucketize_forecast(points: dict[str, dict[str, Any]], size: int) -> list[dict[str, Any]]:
+    keys = sorted(points)
+    result = []
+    for chunk in _chunks(keys, max(1, size)):
+        result.append(
+            {
+                "date": chunk[0],
+                "end": chunk[-1],
+                "services": sum(points[key]["services"] for key in chunk),
+                "expectedNonRenewals": round(sum(points[key]["expected"] for key in chunk), 2),
+                "expectedLossCents": sum(points[key]["loss"] for key in chunk),
+            }
+        )
+    return result
+
+
+def range_details(
+    customers: list[dict[str, Any]],
+    as_of: datetime,
+    start_date: str,
+    end_date: str,
+    kind: str,
+    settings: dict[str, Any],
+    limit: int = 200,
+) -> dict[str, Any]:
+    """Услуги диапазона дат: факт (уже истекли) или прогноз (истекают)."""
+    from datetime import date as date_type
+
+    first = date_type.fromisoformat(start_date)
+    last = date_type.fromisoformat(end_date)
+    rows: list[dict[str, Any]] = []
+    customers_with_events: set[int] = set()
+    expected_total = 0.0
+    loss_total = 0
+
+    for customer in customers:
+        mitigation = float(customer.get("money", {}).get("mitigation") or 0.0)
+        for service in customer.get("services") or []:
+            if service.get("status") == "deleted":
+                continue
+            expires = parse_iso(service["expiresAt"])
+            expires_date = expires.astimezone(timezone.utc).date()
+            if not (first <= expires_date <= last):
+                continue
+            if kind == "fact" and expires > as_of:
+                continue
+            if kind == "forecast" and expires <= as_of:
+                continue
+
+            customers_with_events.add(customer["id"])
+            chance = None
+            loss = None
+            if kind == "forecast":
+                chance = probability(float(service["score"]), settings)
+                loss = round(chance * int(service["priceCents"]) * (1.0 - mitigation))
+                expected_total += chance
+                loss_total += loss
+
+            rows.append(
+                {
+                    "serviceId": int(service["id"]),
+                    "serviceName": service["name"],
+                    "customerId": int(customer["id"]),
+                    "email": customer["email"],
+                    "priceCents": int(service["priceCents"]),
+                    "score": float(service["score"]),
+                    "level": service.get("level"),
+                    "status": service.get("status"),
+                    "expiresAt": service["expiresAt"],
+                    "probability": None if chance is None else round(chance, 3),
+                    "expectedLossCents": loss,
+                }
+            )
+
+    if kind == "forecast":
+        rows.sort(key=lambda row: (row["expectedLossCents"] or 0, row["priceCents"]), reverse=True)
+    else:
+        rows.sort(key=lambda row: (row["priceCents"], row["score"]), reverse=True)
+
+    return {
+        "date": start_date,
+        "end": end_date,
+        "kind": kind,
+        "services": len(rows),
+        "customers": len(customers_with_events),
+        "expectedNonRenewals": round(expected_total, 2),
+        "expectedLossCents": loss_total,
+        "items": rows[:limit],
+        "truncated": len(rows) > limit,
     }

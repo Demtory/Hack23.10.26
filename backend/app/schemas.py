@@ -337,12 +337,14 @@ class CustomerViewOut(CustomerDetailOut):
 
 class ForecastFactPoint(APIModel):
     date: str
+    end: str
     services: int
     customers: int
 
 
 class ForecastPoint(APIModel):
     date: str
+    end: str
     services: int
     expected_non_renewals: FiniteFloat
     expected_loss: FiniteFloat
@@ -366,3 +368,29 @@ class ForecastOut(APIModel):
     forecast: list[ForecastPoint]
     totals: ForecastTotals
     note: str
+
+
+class ForecastDayItem(APIModel):
+    service_id: SQLiteInt
+    service_name: str
+    customer_id: SQLiteInt
+    email: str
+    price: FiniteFloat
+    score: FiniteFloat
+    level: Literal["high", "medium", "low", "unknown"]
+    status: str
+    expires_at: str
+    probability: FiniteFloat | None = None
+    expected_loss: FiniteFloat | None = None
+
+
+class ForecastDayOut(APIModel):
+    date: str
+    end: str
+    kind: Literal["fact", "forecast"]
+    services: int
+    customers: int
+    expected_non_renewals: FiniteFloat
+    expected_loss: FiniteFloat
+    items: list[ForecastDayItem]
+    truncated: bool

@@ -9,8 +9,8 @@
 | `asOf` | ISO-8601 | срез расчёта |
 | `pastDays`, `horizonDays` | int 1…90 | окна факта и прогноза |
 | `currency` | string | `EUR` |
-| `fact[]` | `{date, services, customers}` | истёкшие и не продлённые услуги по дням |
-| `forecast[]` | `{date, services, expectedNonRenewals, expectedLoss}` | прогноз по дням |
+| `fact[]` | `{date, end, services, customers}` | истёкшие и не продлённые услуги по интервалам |
+| `forecast[]` | `{date, end, services, expectedNonRenewals, expectedLoss}` | прогноз по интервалам |
 | `totals` | `{factServices, factCustomers, forecastServices, servicesAtRisk, expectedNonRenewals, expectedLoss}` | итоги окна |
 | `note` | string | почему нет исторических удалений |
 
@@ -21,5 +21,6 @@
 - Ожидаемые непродления: `Σ P(score)` по услугам дня.
 - Ожидаемые потери: `Σ round(P(score) × price × (1 − mitigation))`; `mitigation`
   берётся из денежного блока клиента.
+- `bucketDays` группирует дни в интервалы (`end` — последний день); суммы сохраняются.
 - Услуга с ценой 0 учитывается в счётчике услуг и не добавляет деньги.
 - У клиента без оценки услуг в деталях нет → он не попадает в прогноз.
