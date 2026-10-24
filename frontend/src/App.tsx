@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {NavLink,useNavigate,useLocation,useParams,useBlocker} from 'react-router-dom';
-import {api,ApiError,changeSession} from './api';import type{User}from'./types';
+import {api,ApiError,changeSession} from './api';import type{User}from'./types';import{randomId}from'./random';
 import {ClientProvider,useClients,defaults}from'./state/ClientContext';import{DraftProvider,useDraft}from'./state/SettingsDraft';
 import{useLiveUpdates}from'./hooks/useLiveUpdates';import{BrandLogo}from'./components/BrandLogo';import{BrandIcon}from'./components/BrandIcon';import{Dialog,ErrorBox,Spinner,dateTime}from'./components/ui';
 import{Login}from'./pages/Login';import{Dashboard}from'./pages/Dashboard';import{Customers}from'./pages/Customers';import{Customer}from'./pages/Customer';import{Settings}from'./pages/Settings';import{Data}from'./pages/Data';
@@ -8,11 +8,11 @@ export default function App(){return <ClientProvider><DraftProvider><Shell/></Dr
 function Shell(){const[user,setUser]=useState<User|null|undefined>(),[bootError,setBootError]=useState<string|null>(null),[error,setError]=useState<string|null>(null),[drawer,setDrawer]=useState(false),[logoutPrompt,setLogoutPrompt]=useState(false),[owner,setOwner]=useState('');const draft=useDraft(),clients=useClients(),navigate=useNavigate(),location=useLocation();const live=useLiveUpdates(!!user);const userRef=useRef(user);userRef.current=user;
  const protectedDraft=draft.dirty||draft.busy||draft.state==='uncertain';
  const blocker=useBlocker(({currentLocation,nextLocation})=>!!user&&protectedDraft&&currentLocation.pathname!==nextLocation.pathname);
- async function boot(){setBootError(null);try{const u=await api.me();setUser(u);draft.identify(u.id);let nonce=sessionStorage.getItem('view_session');if(!nonce){nonce=crypto.randomUUID();sessionStorage.setItem('view_session',nonce);}setOwner(`${u.id}:${nonce}`);}catch(e){if(e instanceof ApiError&&e.status===401)setUser(null);else setBootError('Не удалось связаться с сервером. Повторите подключение.');}}
+ async function boot(){setBootError(null);try{const u=await api.me();setUser(u);draft.identify(u.id);let nonce=sessionStorage.getItem('view_session');if(!nonce){nonce=randomId();sessionStorage.setItem('view_session',nonce);}setOwner(`${u.id}:${nonce}`);}catch(e){if(e instanceof ApiError&&e.status===401)setUser(null);else setBootError('Не удалось связаться с сервером. Повторите подключение.');}}
  useEffect(()=>{void boot();},[]);
  useEffect(()=>{const expire=()=>{changeSession();draft.expire();setUser(null);setDrawer(false);clients.setSelection({...defaults});clients.setRestore(null);};window.addEventListener('risk:unauthorized',expire);return()=>window.removeEventListener('risk:unauthorized',expire);},[draft.dirty,draft.busy]);
  useEffect(()=>{if(!protectedDraft)return;const handler=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[protectedDraft]);
- function loggedIn(u:User){const nonce=crypto.randomUUID();sessionStorage.setItem('view_session',nonce);setOwner(`${u.id}:${nonce}`);draft.identify(u.id);clients.setSelection({...defaults});clients.setRestore(null);setUser(u);if(location.pathname==='/'||location.pathname==='/login')navigate('/overview',{replace:true});}
+ function loggedIn(u:User){const nonce=randomId();sessionStorage.setItem('view_session',nonce);setOwner(`${u.id}:${nonce}`);draft.identify(u.id);clients.setSelection({...defaults});clients.setRestore(null);setUser(u);if(location.pathname==='/'||location.pathname==='/login')navigate('/overview',{replace:true});}
  async function logout(){try{await api.logout();draft.clear();clients.setSelection({...defaults});clients.setRestore(null);sessionStorage.removeItem('view_session');setOwner('');setUser(null);navigate('/login',{replace:true});}catch(e){setError(e instanceof Error?e.message:'Не удалось выйти');}setLogoutPrompt(false);}
  if(user===undefined)return <div className="boot"><BrandLogo/>{bootError?<ErrorBox message={bootError} onRetry={()=>void boot()}/>:<Spinner label="Открываем панель"/>}</div>;
  if(!user)return <Login onLogin={loggedIn}/>;
