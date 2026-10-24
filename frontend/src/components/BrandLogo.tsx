@@ -1,0 +1,1 @@
+export function BrandLogo({compact=false}:{compact?:boolean}){return <span className="brand-logo"><img src={compact?'/brand/aeza-mark-black.svg':'/brand/aeza-logo-black.svg'} alt="Aéza" width={compact?24:124} height={compact?24:29}/></span>;}

@@ -58,6 +58,9 @@ export interface Money {
 }
 
 export interface CustomerDetail {
+  calculation: CalculationContext;
+  asOf:string;
+  updatedAt:string;
   id: number;
   email: string;
   balance: number;

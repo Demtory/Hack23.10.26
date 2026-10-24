@@ -1,133 +1,27 @@
-import { useEffect, useState } from "react";
-import { api, ApiError } from "./api";
-import { Login } from "./pages/Login";
-import { Dashboard } from "./pages/Dashboard";
-import { Customer } from "./pages/Customer";
-import { Settings } from "./pages/Settings";
-import { Data } from "./pages/Data";
-import type { User } from "./types";
-import { ErrorBox, Spinner } from "./components/ui";
-
-type Page = "dashboard" | "settings" | "data";
-
-export default function App() {
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
-  const [page, setPage] = useState<Page>("dashboard");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [liveTick, setLiveTick] = useState(0);
-
-  useEffect(() => {
-    api
-      .me()
-      .then(setUser)
-      .catch(() => setUser(null));
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const source = new EventSource("/api/v1/events");
-    source.addEventListener("scores.updated", () => setLiveTick((value) => value + 1));
-    const polling = window.setInterval(() => setLiveTick((value) => value + 1), 15_000);
-    return () => {
-      source.close();
-      window.clearInterval(polling);
-    };
-  }, [user]);
-
-  async function logout() {
-    setLogoutError(null);
-    try {
-      await api.logout();
-      setUser(null);
-      setSelectedId(null);
-    } catch (error) {
-      setLogoutError(error instanceof ApiError ? error.message : "Не удалось завершить сессию. Проверьте соединение и повторите выход.");
-    }
-  }
-
-  function navigate(next: Page) {
-    setSelectedId(null);
-    setPage(next);
-  }
-
-  if (user === undefined) {
-    return (
-      <div className="boot">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
-        <Spinner label="Поднимаем панель" />
-      </div>
-    );
-  }
-
-  if (user === null) {
-    return <Login onLogin={setUser} />;
-  }
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
-
-        <nav className="nav" aria-label="Разделы">
-          <button className={`nav__item ${page === "dashboard" && !selectedId ? "nav__item--active" : ""}`} onClick={() => navigate("dashboard")}>
-            <span className="nav__index">01</span>
-            <span>Рейтинг</span>
-          </button>
-          <button className={`nav__item ${page === "settings" ? "nav__item--active" : ""}`} onClick={() => navigate("settings")}>
-            <span className="nav__index">02</span>
-            <span>Настройки модели</span>
-          </button>
-          <button className={`nav__item ${page === "data" ? "nav__item--active" : ""}`} onClick={() => navigate("data")}>
-            <span className="nav__index">03</span>
-            <span>Данные</span>
-          </button>
-        </nav>
-
-        <div className="sidebar__note">
-          <span className="pulse" />
-          Пересчёт по SSE
-        </div>
-
-        <div className="sidebar__foot">
-          <div className="user-badge">
-            <span className="user-badge__avatar">{user.email.slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>{user.email.split("@")[0]}</strong>
-              <span>{user.email}</span>
-            </div>
-          </div>
-          {logoutError ? <ErrorBox message={logoutError} /> : null}
-          <button className="button button--sidebar" onClick={logout}>
-            Выйти
-          </button>
-        </div>
-      </aside>
-
-      <main className="main">
-        <div className="main__inner">
-          {page === "dashboard" && !selectedId ? (
-            <Dashboard onSelect={setSelectedId} liveTick={liveTick} />
-          ) : null}
-          {page === "dashboard" && selectedId ? (
-            <Customer id={selectedId} onBack={() => setSelectedId(null)} liveTick={liveTick} />
-          ) : null}
-          {page === "settings" ? <Settings liveTick={liveTick} /> : null}
-          {page === "data" ? <Data liveTick={liveTick} onSnapshotUploaded={() => setLiveTick((v) => v + 1)} /> : null}
-        </div>
-      </main>
-    </div>
-  );
+import {useEffect,useRef,useState} from 'react';
+import {NavLink,useNavigate,useLocation,useParams,useBlocker} from 'react-router-dom';
+import {api,ApiError,changeSession} from './api';import type{User}from'./types';
+import {ClientProvider,useClients,defaults}from'./state/ClientContext';import{DraftProvider,useDraft}from'./state/SettingsDraft';
+import{useLiveUpdates}from'./hooks/useLiveUpdates';import{BrandLogo}from'./components/BrandLogo';import{BrandIcon}from'./components/BrandIcon';import{Dialog,ErrorBox,Spinner,dateTime}from'./components/ui';
+import{Login}from'./pages/Login';import{Dashboard}from'./pages/Dashboard';import{Customers}from'./pages/Customers';import{Customer}from'./pages/Customer';import{Settings}from'./pages/Settings';import{Data}from'./pages/Data';
+export default function App(){return <ClientProvider><DraftProvider><Shell/></DraftProvider></ClientProvider>;}
+function Shell(){const[user,setUser]=useState<User|null|undefined>(),[bootError,setBootError]=useState<string|null>(null),[error,setError]=useState<string|null>(null),[drawer,setDrawer]=useState(false),[logoutPrompt,setLogoutPrompt]=useState(false),[owner,setOwner]=useState('');const draft=useDraft(),clients=useClients(),navigate=useNavigate(),location=useLocation();const live=useLiveUpdates(!!user);const userRef=useRef(user);userRef.current=user;
+ const protectedDraft=draft.dirty||draft.busy||draft.state==='uncertain';
+ const blocker=useBlocker(({currentLocation,nextLocation})=>!!user&&protectedDraft&&currentLocation.pathname!==nextLocation.pathname);
+ async function boot(){setBootError(null);try{const u=await api.me();setUser(u);draft.identify(u.id);let nonce=sessionStorage.getItem('view_session');if(!nonce){nonce=crypto.randomUUID();sessionStorage.setItem('view_session',nonce);}setOwner(`${u.id}:${nonce}`);}catch(e){if(e instanceof ApiError&&e.status===401)setUser(null);else setBootError('Не удалось связаться с сервером. Повторите подключение.');}}
+ useEffect(()=>{void boot();},[]);
+ useEffect(()=>{const expire=()=>{changeSession();draft.expire();setUser(null);setDrawer(false);clients.setSelection({...defaults});clients.setRestore(null);};window.addEventListener('risk:unauthorized',expire);return()=>window.removeEventListener('risk:unauthorized',expire);},[draft.dirty,draft.busy]);
+ useEffect(()=>{if(!protectedDraft)return;const handler=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler);},[protectedDraft]);
+ function loggedIn(u:User){const nonce=crypto.randomUUID();sessionStorage.setItem('view_session',nonce);setOwner(`${u.id}:${nonce}`);draft.identify(u.id);clients.setSelection({...defaults});clients.setRestore(null);setUser(u);if(location.pathname==='/'||location.pathname==='/login')navigate('/overview',{replace:true});}
+ async function logout(){try{await api.logout();draft.clear();clients.setSelection({...defaults});clients.setRestore(null);sessionStorage.removeItem('view_session');setOwner('');setUser(null);navigate('/login',{replace:true});}catch(e){setError(e instanceof Error?e.message:'Не удалось выйти');}setLogoutPrompt(false);}
+ if(user===undefined)return <div className="boot"><BrandLogo/>{bootError?<ErrorBox message={bootError} onRetry={()=>void boot()}/>:<Spinner label="Открываем панель"/>}</div>;
+ if(!user)return <Login onLogin={loggedIn}/>;
+ const route=location.pathname==='/'?'/overview':location.pathname;const id=route.startsWith('/customers/')?Number(route.split('/')[2]):null;
+ const links=[['/overview','Сводка','overview'],['/customers','Клиенты','customers'],['/settings','Настройки модели','settings'],['/data','Данные','data']] as const;
+ const nav=<nav aria-label="Разделы">{links.map(([to,label,kind])=><NavLink key={to} to={to} className={({isActive})=>'nav__item '+(isActive||route==='/'&&to==='/overview'?'nav__item--active':'')} onClick={()=>setDrawer(false)}><BrandIcon kind={kind}/>{label}</NavLink>)}</nav>;
+ const foot=<><div className="connection" role="status"><span className={live.mode.startsWith('Связь')?'connection-dot connection-dot--off':'connection-dot'}/><span>{live.mode}<small>Последнее получение: {dateTime(live.last)}</small></span></div><div className="sidebar__foot"><span className="avatar">{user.email.slice(0,1).toUpperCase()}</span><span className="user-email">{user.email}</span><button className="button button--ghost" onClick={()=>protectedDraft?setLogoutPrompt(true):void logout()}>Выйти</button></div></>;
+ return <div className="app-shell"><aside className="sidebar"><NavLink to="/overview" aria-label="Aéza — сводка"><BrandLogo/></NavLink><div className="product-label">Панель маркетолога <span>RISK DESK</span></div>{nav}{foot}</aside><div className="mobile-header"><NavLink to="/overview" aria-label="Aéza — сводка"><BrandLogo compact/></NavLink><strong>Risk Desk</strong><button className="button button--ghost" aria-label="Открыть меню" onClick={()=>setDrawer(true)}>Меню</button></div><main className="main" id="main"><div className="workspace-label"><span>Aéza / Аналитика клиентов</span><span className="workspace-badge">Текущий снимок</span></div>{error&&<ErrorBox message={error} onRetry={()=>setError(null)}/>}{route==='/overview'?<Dashboard liveTick={live.tick} owner={owner}/>:route==='/customers'?<Customers liveTick={live.tick} owner={owner}/>:id!==null&&Number.isFinite(id)?<Customer id={id} onBack={()=>location.state?.origin&&location.state?.owner===owner?navigate(-1):navigate('/customers')} liveTick={live.tick}/>:route==='/settings'?<Settings liveTick={live.tick}/>:route==='/data'?<Data liveTick={live.tick} onSnapshotUploaded={live.refresh}/>:<Dashboard liveTick={live.tick} owner={owner}/>}</main>
+ {drawer&&<Dialog title="Разделы" onCancel={()=>setDrawer(false)}><button className="button" autoFocus onClick={()=>setDrawer(false)}>Закрыть меню</button>{nav}{foot}</Dialog>}
+ {(blocker.state==='blocked'||logoutPrompt)&&<Dialog title="Несохранённые изменения" onCancel={()=>{if(blocker.state==='blocked')blocker.reset();setLogoutPrompt(false);}}><p>{draft.busy?'Сохранение выполняется. Дождитесь ответа сервера.':'Остаться с черновиком или явно отказаться от изменений?'}</p><div className="dialog-actions"><button className="button button--primary" autoFocus onClick={()=>{if(blocker.state==='blocked')blocker.reset();setLogoutPrompt(false);}}>Остаться</button><button className="button" disabled={draft.busy} onClick={()=>{draft.clear();if(blocker.state==='blocked')blocker.proceed();if(logoutPrompt)void logout();}}>Отказаться от изменений</button></div></Dialog>}
+ </div>;
 }

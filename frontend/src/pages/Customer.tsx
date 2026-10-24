@@ -1,3 +1,4 @@
+import {CalculationContext} from "../components/CalculationContext";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { CustomerDetail, RuleExplanation, Service } from "../types";
@@ -8,7 +9,7 @@ import {
   LevelBadge,
   money,
   number,
-  shortDate,
+  dateTime,
   Spinner,
   StatusBadge,
   termLabel,
@@ -25,6 +26,7 @@ export function Customer({
 }) {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retry,setRetry]=useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,18 +47,18 @@ export function Customer({
     return () => {
       cancelled = true;
     };
-  }, [id, liveTick]);
+  }, [id, liveTick,retry]);
 
   return (
     <div className="page">
       <button className="back-link" onClick={onBack}>
-        ← Назад к рейтингу
+        ← Назад
       </button>
 
-      {error ? <ErrorBox message={error} /> : null}
+      {error ? <ErrorBox message={error} onRetry={()=>setRetry(x=>x+1)}/> : null}
       {loading && !customer ? <Spinner label="Считаем клиента" /> : null}
 
-      {customer ? (
+      {customer && customer.id===id ? (
         <>
           <header className="customer-header">
             <div>
@@ -72,11 +74,13 @@ export function Customer({
               </div>
             </div>
             <div className="confidence">
-              <span>Уверенность</span>
+              <span>Полнота данных</span>
               <strong>{Math.round(customer.confidence * 100)}%</strong>
             </div>
           </header>
 
+          <CalculationContext asOf={customer.asOf} updatedAt={customer.updatedAt}/>
+          <p className="notice">Деньги — эвристическая оценка ближайших платежей разных услуг, не гарантированный убыток и не месячная выручка. При отсутствии оценки нулевые потери не доказывают безопасность.</p>
           {customer.score === null ? (
             <EmptyState title="Нет оценки" text={customer.unknownReason ?? "Недостаточно данных"} />
           ) : (
@@ -103,7 +107,7 @@ export function Customer({
                   <p className="eyebrow">ПОЧЕМУ РИСК</p>
                   <h2>{customer.summary}</h2>
                   <p className="muted">
-                    Ближайшее продление и вероятность ухода. Баланс снижает немедленную потерю,
+                    Экспертная оценка, не статистически подтверждённая вероятность. Баланс снижает денежную оценку,
                     но не отменяет сам риск.
                   </p>
                 </div>
@@ -201,16 +205,16 @@ export function Customer({
                   <span className="card__meta">{servicesWord(customer.services.length)}</span>
                 </div>
                 <div className="table-wrap">
-                  <table className="table table--services">
+                  <table className="table table--services"><caption className="sr-only">Услуги клиента, цена в EUR и платёжный период</caption>
                     <thead>
                       <tr>
-                        <th>Услуга</th>
-                        <th>Статус</th>
-                        <th className="num">Цена</th>
-                        <th className="num">Период</th>
-                        <th className="num">Авто</th>
-                        <th className="num">Истекает</th>
-                        <th className="num">Score</th>
+                        <th scope="col">Услуга</th>
+                        <th scope="col">Статус</th>
+                        <th scope="col" className="num">Цена</th>
+                        <th scope="col" className="num">Период</th>
+                        <th scope="col" className="num">Авто</th>
+                        <th scope="col" className="num">Истекает</th>
+                        <th scope="col" className="num">Score</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -251,7 +255,7 @@ function ServiceRow({ service }: { service: Service }) {
       <td className="num">{service.autoProlong ? "вкл" : "выкл"}</td>
       <td className="num">
         <div className="expiry-cell">
-          <span>{shortDate(service.expiresAt)}</span>
+          <span>{dateTime(service.expiresAt)}</span>
           <small>{expiry}</small>
         </div>
       </td>

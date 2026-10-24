@@ -1,0 +1,30 @@
+{
+  "source": "Аеза_Гайдбук_2026.pdf",
+  "pdfPage": 11,
+  "pdfSha256": "f92ff0d006d567d06cc6a8585232a8e552e6128c6b2b6824402d780e2a8e0105",
+  "method": "Exact original PDF vector crop, no redrawing",
+  "files": {
+    "aeza-logo-white.svg": "a98fd3e35442f5c201f62e20e62c6cfbabc6d5d7f2718ad639e3806508702613",
+    "aeza-mark-black.svg": "5729bcdf7aa3a35fd10bda8ef33e57b1fc3b371b46aba46e62ddfbaf3ab89f16",
+    "aeza-logo-black.svg": "d01c654b21f77c172fdec1e8def8e246ae80d21446f65e5afdd73cb678d4f24d",
+    "aeza-mark-white.svg": "cab62ec92e825a607936b132578bd51df1b08b90d5878cf87824391deadf37c1"
+  },
+  "fonts": {
+    "Exo2Variable.ttf": {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/exo2/Exo2%5Bwght%5D.ttf",
+      "sha256": "205a448676a2586f9c57c25f3d5c58ca8db7e6cf5edf7506783a010c6fe2bfb5"
+    },
+    "Exo2-OFL.txt": {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/exo2/OFL.txt",
+      "sha256": "7f95a8eeecc6904ffc81cd10cc8ebc7fcee72a67922924bf45f02dff03b88127"
+    },
+    "InterVariable.ttf": {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+      "sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031"
+    },
+    "Inter-OFL.txt": {
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+      "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+    }
+  }
+}

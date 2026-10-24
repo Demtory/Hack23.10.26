@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import csv
+import io
+import unicodedata
 import json
 import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -14,7 +17,7 @@ from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredenti
 
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
-from .schemas import CustomerDetailOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, detail_response
+from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, detail_response
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -188,42 +191,58 @@ def _list_item(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
+def _selection(run, level, q, urgency):
+    if level is not None and level not in {'high', 'medium', 'low', 'unknown'}:
+        raise HTTPException(422, detail='unsupported level')
+    if urgency not in {'all', 'expired', '48h', '7d'}:
+        raise HTTPException(422, detail='unsupported urgency')
+    where, params = ['cs.run_id = ?'], [run['id']]
+    if level:
+        where.append('cs.level = ?'); params.append(level)
+    if q:
+        where.append('lower(a.email) LIKE ?'); params.append(f'%{q.lower()}%')
+    if urgency != 'all':
+        as_of = datetime.fromisoformat(json.loads(run['summary'])['asOf'].replace('Z', '+00:00'))
+        iso = lambda dt: dt.astimezone(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        interval = 's.expires_at <= ?' if urgency == 'expired' else 's.expires_at > ? AND s.expires_at <= ?'
+        params.append(iso(as_of))
+        if urgency != 'expired': params.append(iso(as_of + timedelta(hours=48 if urgency == '48h' else 168)))
+        where.append("EXISTS (SELECT 1 FROM services s WHERE s.owner_id=a.id AND s.status IN ('active','suspended','prolong_wait') AND " + interval + ')')
+    return 'FROM customer_scores cs JOIN accounts a ON a.id=cs.account_id WHERE ' + ' AND '.join(where), params
+
+
+def _order(sort, order):
+    if sort not in CUSTOMER_SORTS: raise HTTPException(422, detail='unsupported sort')
+    direction = (order or ('desc' if sort in {'score', 'expectedLoss'} else 'asc')).lower()
+    if direction not in {'asc', 'desc'}: raise HTTPException(422, detail='unsupported order')
+    expression = (f'CASE WHEN cs.score IS NULL THEN 1 ELSE 0 END ASC, cs.score {direction.upper()}'
+                  if sort == 'score' else f'{CUSTOMER_SORTS[sort]} {direction.upper()}')
+    return expression + ', a.id ASC', direction
+
+
+CUSTOMER_COLUMNS = ('SELECT a.id, a.email, a.balance, a.total_replenished, '
+                    'cs.score, cs.level, cs.expected_loss, cs.amount_at_risk, cs.services_at_risk ')
+
+
 @router.get('/customers', response_model=CustomerPageOut)
 def customers(
     sort: str = Query('score'), order: str | None = Query(None),
-    level: str | None = Query(None), q: str | None = Query(None),
+    level: str | None = Query(None), q: str | None = Query(None), urgency: str = Query('all'),
     page: int = Query(1, ge=1), pageSize: int = Query(25, ge=1, le=100),
     config: Config = Depends(get_config), conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
-    if sort not in CUSTOMER_SORTS:
-        raise HTTPException(status_code=422, detail=f'unsupported sort: {sort}')
-    if level is not None and level not in {'high', 'medium', 'low', 'unknown'}:
-        raise HTTPException(status_code=422, detail=f'unsupported level: {level}')
-    direction = (order or ('desc' if sort in {'score', 'expectedLoss'} else 'asc')).lower()
-    if direction not in {'asc','desc'}:
-        raise HTTPException(status_code=422, detail='order must be asc or desc')
+    order_sql, _ = _order(sort, order)
     _ensure_summary(conn, config)
     with read_transaction(conn):
         run = latest_run(conn)
         assert run is not None
         summary = json.loads(run['summary'])
-        where = ['cs.run_id = ?']
-        params: list[Any] = [run['id']]
-        if level:
-            where.append('cs.level = ?'); params.append(level)
-        if q:
-            where.append('lower(a.email) LIKE ?'); params.append(f'%{q.lower()}%')
-        where_sql = ' AND '.join(where)
-        source = 'FROM customer_scores cs JOIN accounts a ON a.id = cs.account_id WHERE ' + where_sql
+        source, params = _selection(run, level, q, urgency)
         total = conn.execute('SELECT count(*) AS n ' + source, params).fetchone()['n']
-        columns = ('SELECT cs.account_id AS id, a.email, a.balance, a.total_replenished, '
-                   'cs.score, cs.level, cs.expected_loss, cs.amount_at_risk, cs.services_at_risk ')
-        order_sql = (f'CASE WHEN cs.score IS NULL THEN 1 ELSE 0 END ASC, cs.score {direction.upper()}'
-                     if sort == 'score' else f'{CUSTOMER_SORTS[sort]} {direction.upper()}')
-        rows = conn.execute(columns + source + f' ORDER BY {order_sql}, a.id ASC LIMIT ? OFFSET ?',
+        rows = conn.execute(CUSTOMER_COLUMNS + source + f' ORDER BY {order_sql} LIMIT ? OFFSET ?',
                             [*params, pageSize, (page-1)*pageSize]).fetchall()
-        top = conn.execute(columns + source + ' ORDER BY cs.expected_loss DESC, a.id ASC LIMIT 5', params).fetchall()
+        top = conn.execute(CUSTOMER_COLUMNS + source + ' ORDER BY cs.expected_loss DESC, a.id ASC LIMIT 5', params).fetchall()
         return CustomerPageOut.model_validate({
             'items': [_list_item(row) for row in rows], 'total': total, 'page': page, 'pageSize': pageSize,
             'topLosses': [_list_item(row) for row in top], 'summary': _summary_api(summary, False),
@@ -231,7 +250,59 @@ def customers(
         }).model_dump(by_alias=True)
 
 
-@router.get("/customers/{id}", response_model=CustomerDetailOut, response_model_exclude_unset=True)
+def _csv_text(value: str) -> str:
+    normalized = unicodedata.normalize('NFKC', value)
+    leading_control = bool(value) and unicodedata.category(value[0]) in {'Cc', 'Cf'}
+    probe = normalized.lstrip()
+    while probe and unicodedata.category(probe[0]) in {'Cc', 'Cf'}:
+        probe = probe[1:].lstrip()
+    return 'text:' + value if leading_control or value.startswith('text:') or probe.startswith(('=', '+', '-', '@')) else value
+
+
+def _decimal_cents(value: int) -> str:
+    whole, fraction = divmod(abs(value), 100)
+    return ('-' if value < 0 else '') + f'{whole}.{fraction:02d}'
+
+
+@router.get('/customers/export.csv', response_class=Response, responses={
+    200: {'content': {'text/csv': {}}, 'description': 'UTF-8 BOM CSV, all selected customers, exact EUR strings'},
+    409: {'description': 'stale_calculation or empty_selection'},
+    401: {'description': 'Authentication required'},
+})
+def export_customers(
+    runId: int = Query(..., ge=1), sort: str = Query('score'), order: str | None = Query(None),
+    level: str | None = Query(None), q: str | None = Query(None), urgency: str = Query('all'),
+    config: Config = Depends(get_config), conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+):
+    order_sql, direction = _order(sort, order)
+    _ensure_summary(conn, config)
+    with read_transaction(conn):
+        run = latest_run(conn)
+        if run is None or run['id'] != runId:
+            raise HTTPException(409, detail={'code': 'stale_calculation', 'message': 'Расчёт изменился. Обновите список и повторите экспорт.'})
+        summary = json.loads(run['summary'])
+        source, params = _selection(run, level, q, urgency)
+        rows = conn.execute(CUSTOMER_COLUMNS + source + ' ORDER BY ' + order_sql, params).fetchall()
+        if not rows: raise HTTPException(409, detail={'code': 'empty_selection', 'message': 'Нет клиентов для экспорта'})
+        output = io.StringIO(newline='')
+        writer = csv.writer(output, quoting=csv.QUOTE_ALL, lineterminator='\r\n')
+        writer.writerow(['customer_id','email','balance_eur','total_replenished_eur','score','risk_level',
+                         'expected_loss_eur','amount_at_risk_eur','services_at_risk','filter_q','filter_level',
+                         'filter_urgency','sort','order','run_id','settings_version','as_of','calculated_at',
+                         'source_generated_at','currency','csv_format_version'])
+        for row in rows:
+            writer.writerow([row['id'], _csv_text(row['email']), _decimal_cents(row['balance']),
+                _decimal_cents(row['total_replenished']), '' if row['score'] is None else row['score'], row['level'],
+                _decimal_cents(row['expected_loss']), _decimal_cents(row['amount_at_risk']), row['services_at_risk'],
+                _csv_text(q or ''),level or '',urgency,sort,direction,run['id'],summary['calculation']['settingsVersion'],
+                summary['asOf'],summary['updatedAt'],'','EUR',1])
+        content = output.getvalue().encode('utf-8-sig')
+    return Response(content, media_type='text/csv; charset=utf-8', headers={
+        'Content-Disposition': f'attachment; filename="customers-run-{runId}.csv"', 'Cache-Control': 'no-store'})
+
+
+@router.get("/customers/{id}", response_model=CustomerViewOut, response_model_exclude_unset=True)
 def customer(
     id: int,
     config: Config = Depends(get_config),
@@ -239,10 +310,14 @@ def customer(
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     _ensure_summary(conn, config)
-    detail = customer_detail(conn, id)
-    if detail is None:
-        raise HTTPException(status_code=404, detail="customer not found")
-    return _detail_api(detail)
+    with read_transaction(conn):
+        run = latest_run(conn)
+        detail = customer_detail(conn, id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="customer not found")
+        summary = json.loads(run['summary'])
+        return {**_detail_api(detail), 'calculation': summary['calculation'],
+                'asOf': summary['asOf'], 'updatedAt': summary['updatedAt']}
 
 
 # ----------------------------------------------------------------------- analytics
@@ -310,6 +385,10 @@ def patch_settings(
     try:
         with transaction(conn):
             current, version, _ = get_settings(conn)
+            if patch.expected_version is not None and patch.expected_version != version:
+                raise HTTPException(409, detail={'code':'settings_version_conflict',
+                    'expectedVersion':patch.expected_version,'currentVersion':version,
+                    'message':'Настройки изменены другим пользователем. Черновик сохранён.'})
             merged = copy.deepcopy(current)
             delta = patch.model_dump(by_alias=True, exclude_none=True)
             for key in ("weights", "statusFloors"):
@@ -395,10 +474,19 @@ def _source_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
 
 @router.get("/source/snapshot")
 def read_snapshot(
+    response: Response,
+    config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
-    return _source_snapshot(conn)
+    _ensure_summary(conn, config)
+    with read_transaction(conn):
+        run = latest_run(conn)
+        summary = json.loads(run['summary'])
+        for key, value in {'Run-Id':run['id'], 'Settings-Version':summary['calculation']['settingsVersion'],
+                           'As-Of':summary['asOf'], 'Updated-At':summary['updatedAt']}.items():
+            response.headers['X-Calculation-' + key] = str(value)
+        return _source_snapshot(conn)
 
 
 @router.put("/source/snapshot")

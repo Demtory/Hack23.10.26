@@ -1,3 +1,6 @@
+import {useDraft} from "../state/SettingsDraft";
+import {Dialog} from "../components/ui";
+import {CalculationContext} from "../components/CalculationContext";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import type { ModelSettings, Summary } from "../types";
@@ -37,37 +40,11 @@ const FEATURE_EXPLANATIONS: Record<string, { guide: string; impact: string }> = 
 };
 
 export function Settings({ liveTick }: { liveTick: number }) {
-  const [settings, setSettings] = useState<ModelSettings | null>(null);
-  const [draft, setDraft] = useState<ModelSettings | null>(null);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .settings()
-      .then((value) => {
-        if (cancelled) return;
-        setSettings(value);
-        setDraft(value);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : "Не удалось загрузить настройки");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    api
-      .summary()
-      .then(setSummary)
-      .catch(() => undefined);
-  }, [liveTick]);
-
+  const model=useDraft();
+  const {settings,draft,setDraft,summary,error,busy}=model;
+  const [discardPrompt,setDiscardPrompt]=useState(false);
+  useEffect(()=>{void model.load();},[liveTick]);
+  const status=model.state==='saved'?'Настройки сохранены. Результаты относятся к применённой версии.':model.state==='conflict'?'Конфликт версий. Черновик сохранён; загрузка текущей модели требует отказа от правок.':model.state==='uncertain'?'Результат операции неизвестен. Черновик сохранён; автоматического повтора нет.':model.dirty?'Несохранённый черновик — результаты ещё не изменены.':null;
   const weightSum = useMemo(
     () => (draft ? Object.values(draft.weights).reduce((sum, value) => sum + value, 0) : 0),
     [draft],
@@ -88,31 +65,8 @@ export function Settings({ liveTick }: { liveTick: number }) {
       money: { ...settings.money, ...DEFAULTS.money },
       statusFloors: { ...DEFAULTS.statusFloors },
     });
-    setStatus("Значения сброшены в локальном черновике — нажмите «Сохранить».");
   }
-
-  async function save() {
-    if (!draft) return;
-    setBusy(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const result = await api.updateSettings({
-        weights: draft.weights,
-        thresholds: draft.thresholds,
-        money: draft.money,
-        statusFloors: draft.statusFloors,
-      });
-      setSettings(result.settings);
-      setDraft(result.settings);
-      setSummary(result.summary);
-      setStatus("Модель пересчитана. Настройки сохранены в базе и переживут перезапуск.");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось сохранить настройки");
-    } finally {
-      setBusy(false);
-    }
-  }
+  async function save(){await model.save();}
 
   if (!draft) {
     return (
@@ -123,7 +77,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
             <h1>Настройки</h1>
           </div>
         </header>
-        {error ? <ErrorBox message={error} /> : <Spinner label="Загружаем коэффициенты" />}
+        {error ? <ErrorBox message={error} onRetry={()=>void model.load()} /> : <Spinner label="Загружаем коэффициенты" />}
       </div>
     );
   }
@@ -142,7 +96,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
           <button className="button button--ghost" onClick={reset} disabled={busy}>
             Сбросить
           </button>
-          <button className="button button--primary" onClick={save} disabled={busy}>
+          <button className="button button--primary" onClick={save} disabled={busy||model.state==="conflict"||(!model.dirty&&model.state!=="uncertain")}>
             {busy ? "Пересчитываем…" : "Сохранить"}
           </button>
         </div>
@@ -151,15 +105,16 @@ export function Settings({ liveTick }: { liveTick: number }) {
       {error ? <ErrorBox message={error} /> : null}
       {status ? <div className="notice">{status}</div> : null}
 
-      <div className="card" style={{ marginBottom: "1.5rem", borderLeft: "4px solid #6366f1" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+      <fieldset disabled={busy} className="settings-fields"><legend className="sr-only">Параметры модели</legend>
+      <div className="card">
+        <div>
           <div>
-            <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1rem" }}>Как рассчитывается итоговый Risk-Score</h3>
-            <p className="muted" style={{ margin: 0, fontSize: "0.875rem" }}>
+            <h3>Как рассчитывается итоговый Risk-Score</h3>
+            <p className="muted">
               Сумма сырых весов: <strong>{weightSum.toFixed(2)}</strong>. Модель производит автоматическую нормировку: доля фактора равна весу, делённому на сумму весов, а вклад учитывает и значение фактора. Сумма 1.00 не обязательна. Неизвестное значение заменяется на 0.5; при недостаточной полноте данных оценка отсутствует.
             </p>
           </div>
-          <div style={{ background: "#1f2937", padding: "0.5rem 1rem", borderRadius: "8px", fontFamily: "monospace", fontSize: "0.875rem" }}>
+          <div>
             База услуги = 100 × Σ(вес_i × фактор_i) / Σ(весов)
           </div>
         </div>
@@ -171,6 +126,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
         Вес 0 их не отключает. Оценка клиента — максимум оценённых услуг плюс 4 балла за каждую
         дополнительную услугу от среднего порога; итог ограничен 100. Доли весов относятся к базе услуги.
       </p>
+      {model.state==='conflict'||model.state==='uncertain'?<button className="button" onClick={()=>setDiscardPrompt(true)}>Загрузить текущую версию</button>:null}
       <div className="settings-layout">
         <div className="settings-main">
           <section className="card">
@@ -179,7 +135,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
                 <p className="card__label">Коэффициенты</p>
                 <h2>Веса признаков</h2>
               </div>
-              <span className="card__meta">сумма весов: {weightSum.toFixed(2)} (100% вклад)</span>
+              <span className="card__meta">сумма весов: {weightSum.toFixed(2)} (нормируются автоматически)</span>
             </div>
             <div className="weights">
               {draft.features.map((feature) => {
@@ -187,28 +143,29 @@ export function Settings({ liveTick }: { liveTick: number }) {
                 const sharePercent = weightSum > 0 ? ((rawVal / weightSum) * 100).toFixed(1) : "0.0";
                 const info = FEATURE_EXPLANATIONS[feature.code] ?? { guide: feature.description, impact: "Влияние задаётся весом и значением этого признака." };
                 return (
-                  <div className="weight-row" key={feature.code} style={{ paddingBottom: "1.25rem", borderBottom: "1px solid #1f2937" }}>
+                  <div className="weight-row" key={feature.code}>
                     <div className="weight-row__head">
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div>
                           <strong>{feature.title}</strong>
-                          <span style={{ fontSize: "0.75rem", background: "#374151", color: "#9ca3af", padding: "2px 6px", borderRadius: "4px" }}>
+                          <span>
                             доля в модели: {sharePercent}%
                           </span>
                         </div>
-                        <p style={{ margin: "0.25rem 0 0.5rem 0", color: "#d1d5db" }}>{feature.description}</p>
+                        <p>{feature.description}</p>
                         {info && (
-                          <div style={{ fontSize: "0.8rem", color: "#9ca3af", background: "#111827", padding: "0.5rem 0.75rem", borderRadius: "6px", marginTop: "0.25rem" }}>
-                            <div>📘 <em>Суть шкалы:</em> {info.guide}</div>
-                            <div style={{ marginTop: "0.25rem" }}>⚡ <em>Влияние:</em> {info.impact}</div>
+                          <div>
+                            <div><em>Суть шкалы:</em> {info.guide}</div>
+                            <div><em>Влияние:</em> {info.impact}</div>
                           </div>
                         )}
                       </div>
                       <span className="weight-row__value">{rawVal.toFixed(2)}</span>
                     </div>
-                    <div className="weight-row__controls" style={{ marginTop: "0.75rem" }}>
+                    <div className="weight-row__controls">
                       <input
                         type="range"
+                        aria-label={`Шкала: ${feature.title}`}
                         min={feature.min}
                         max={feature.max}
                         step={feature.step}
@@ -218,9 +175,10 @@ export function Settings({ liveTick }: { liveTick: number }) {
                       <input
                         className="input input--number"
                         type="number"
+                        aria-label={`Вес: ${feature.title}`}
                         min={0}
-                        max={1}
-                        step={0.01}
+                        max={feature.max}
+                        step={feature.step}
                         value={rawVal}
                         onChange={(event) => setWeight(feature.code, Number(event.target.value))}
                       />
@@ -238,7 +196,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
                 <h2>Уровни риска</h2>
               </div>
             </div>
-            <p className="muted" style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+            <p className="muted">
               Определяют классификацию клиента: Низкий риск (ниже Среднего), Средний риск (от Среднего до Высокого) и Высокий риск (от порога Высокого).
             </p>
             <div className="thresholds">
@@ -286,6 +244,7 @@ export function Settings({ liveTick }: { liveTick: number }) {
             </p>
             <input
               type="range"
+              aria-label="Снижение денежной оценки балансом"
               min={0}
               max={1}
               step={0.05}
@@ -321,7 +280,8 @@ export function Settings({ liveTick }: { liveTick: number }) {
         <aside className="settings-aside">
           <div className="card card--sticky">
             <p className="card__label">Что получится</p>
-            <h2>После пересчёта</h2>
+            <h2>Применённая модель</h2>
+            <p>Версия {settings?.version} · не предварительный расчёт черновика</p>
             {summary ? (
               <>
                 <div className="mini-stat">
@@ -354,6 +314,9 @@ export function Settings({ liveTick }: { liveTick: number }) {
           </div>
         </aside>
       </div>
+      </fieldset>
+      <CalculationContext asOf={summary?.asOf} updatedAt={summary?.updatedAt}/>
+      {discardPrompt&&<Dialog title="Отказаться от черновика?" onCancel={()=>setDiscardPrompt(false)}><p>Локальные изменения будут заменены текущими настройками.</p><button className="button button--primary" autoFocus onClick={()=>setDiscardPrompt(false)}>Остаться</button><button className="button" onClick={()=>{setDiscardPrompt(false);void model.load(true);}}>Отказаться и загрузить</button></Dialog>}
     </div>
   );
 }

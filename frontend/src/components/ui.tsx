@@ -1,3 +1,4 @@
+import {useRef,useEffect} from "react";
 import type { Level } from "../types";
 
 const LEVEL_LABEL: Record<Level, string> = {
@@ -72,6 +73,7 @@ export function dateTime(value: string | null | undefined): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZoneName: "short",
   }).format(new Date(value));
 }
 
@@ -114,4 +116,10 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
       <p>{text}</p>
     </div>
   );
+}
+
+export function Dialog({title,children,onCancel}:{title:string;children:React.ReactNode;onCancel:()=>void}){
+ const ref=useRef<HTMLDialogElement>(null);
+ useEffect(()=>{const previous=document.activeElement as HTMLElement|null;ref.current?.showModal();return()=>{ref.current?.close();previous?.focus();};},[]);
+ return <dialog ref={ref} aria-label={title} onCancel={e=>{e.preventDefault();onCancel();}}><h2>{title}</h2>{children}</dialog>;
 }

@@ -1,3 +1,4 @@
+import {BrandLogo} from "../components/BrandLogo";
 import { FormEvent, useState } from "react";
 import { api, ApiError } from "../api";
 import type { User } from "../types";
@@ -24,43 +25,12 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <div className="login">
-      <div className="login__aside">
-        <div className="brand brand--light">
-          <span className="brand__mark">◒</span>
-          <span className="brand__text">
-            ОТТОК
-            <small>RISK DESK</small>
-          </span>
-        </div>
-        <div className="login__pitch">
-          <p className="eyebrow">ХАКАТОН РНД · MIDDLE</p>
-          <h1>Кому звонить сегодня — и сколько это стоит.</h1>
-          <p>
-            Один экран для маркетолога: риск оттока, причина и деньги, которые можно потерять
-            при ближайшем продлении.
-          </p>
-          <div className="login__facts">
-            <div>
-              <strong>3</strong>
-              <span>вопроса: кому, почему, сколько</span>
-            </div>
-            <div>
-              <strong>6</strong>
-              <span>объяснимых признаков</span>
-            </div>
-            <div>
-              <strong>0</strong>
-              <span>чёрных ящиков</span>
-            </div>
-          </div>
-        </div>
-        <p className="login__footnote">Данные: синтетический снимок · модель v1</p>
-      </div>
+      <div className="login__aside"><BrandLogo/><div className="login__pitch"><p className="eyebrow">ПАНЕЛЬ МАРКЕТОЛОГА</p><h1>Данные превращаются<br/>в приоритеты.</h1><p>Найдите клиентов, которым нужно внимание.<br/>Разберитесь в причинах риска и денежной оценке.</p></div><div className="brand-pattern" aria-hidden="true"><i/><i/><i/><b/></div><p className="login__footnote">Risk Desk · Aéza</p></div>
 
       <div className="login__panel">
         <form className="login__card" onSubmit={submit}>
           <p className="eyebrow">ВХОД В ПАНЕЛЬ</p>
-          <h2>Аналитик на связи</h2>
+          <h2>Вход в Risk Desk</h2>
           <p className="muted">Доступ защищает клиентские данные и настройки модели.</p>
 
           <label className="field">
@@ -84,7 +54,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             />
           </label>
 
-          {error ? <div className="form-error">{error}</div> : null}
+          {error ? <div className="form-error" role="alert">{error}</div> : null}
 
           <button className="button button--primary button--wide" disabled={busy}>
             {busy ? "Проверяем…" : "Войти"}

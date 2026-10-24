@@ -132,6 +132,7 @@ class SettingsPatch(BaseModel):
     The merged configuration must satisfy medium < high, floor < ceiling and have
     a positive weight. These cross-field constraints are enforced by the API.
     """
+    expected_version: int | None = Field(default=None, strict=True, ge=1)
     weights: dict[str, FiniteFloat] | None = None
     thresholds: ThresholdsPatch | None = None
     probability: ProbabilityPatch | None = None
@@ -307,3 +308,9 @@ class CustomerPageOut(APIModel):
     top_losses: list[CustomerListItemOut] = Field(max_length=5)
     summary: SummaryBase
     calculation: CalculationContext
+
+
+class CustomerViewOut(CustomerDetailOut):
+    calculation: CalculationContext
+    as_of: str
+    updated_at: str
