@@ -19,7 +19,8 @@ from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredenti
 from . import oidc
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
-from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, detail_response
+from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, ForecastOut, detail_response
+from .forecast import build_forecast
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -35,6 +36,7 @@ from .seed import get_settings, replace_snapshot, save_settings, validate_snapsh
 from .store import (
     customer_detail,
     latest_customers,
+    latest_details,
     latest_run,
     latest_summary,
     recompute,
@@ -463,6 +465,35 @@ def analytics_summary(
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     return _summary_api(_ensure_summary(conn, config))
+
+
+@router.get("/analytics/forecast", response_model=ForecastOut)
+def analytics_forecast(
+    past_days: int = Query(30, ge=1, le=90, alias="pastDays"),
+    horizon_days: int = Query(30, ge=1, le=90, alias="horizonDays"),
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    """Факт истечений и прогноз непродлений по срокам оплаты."""
+    summary = _ensure_summary(conn, config)
+    with read_transaction(conn):
+        settings, _version, _updated = get_settings(conn)
+        details = latest_details(conn)
+    as_of = datetime.fromisoformat(summary["asOf"].replace("Z", "+00:00"))
+    data = build_forecast(details, as_of, settings, past_days, horizon_days)
+    data["forecast"] = [
+        {
+            "date": point["date"],
+            "services": point["services"],
+            "expectedNonRenewals": point["expectedNonRenewals"],
+            "expectedLoss": euros(point["expectedLossCents"]),
+        }
+        for point in data["forecast"]
+    ]
+    totals = data["totals"]
+    totals["expectedLoss"] = euros(totals.pop("expectedLossCents"))
+    return data
 
 
 # --------------------------------------------------------------------------- model

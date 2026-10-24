@@ -1,4 +1,4 @@
-import type { CustomerDetail, CustomerPage, Level, ModelSettings, Snapshot, Summary, User } from './types';
+import type { CustomerDetail, CustomerPage, Forecast, Level, ModelSettings, Snapshot, Summary, User } from './types';
 export class ApiError extends Error { constructor(public status:number,message:string,public code?:string){super(message);} }
 let epoch=0;
 export function changeSession(){epoch++;}
@@ -22,7 +22,7 @@ export const api={
  logout:async()=>{const result=await request<{ok:boolean}>('/api/v1/auth/logout',{method:'POST'});localStorage.removeItem('auth_token');changeSession();return result;},
  customers:(q:CustomerQuery)=>request<CustomerPage>('/api/v1/customers?'+params(q)),
  customer:async(id:number):Promise<CustomerDetail>=>{const r=await requestResponse(`/api/v1/customers/${id}`);const d=await r.json();d.asOf=r.headers.get('X-Calculation-As-Of')??undefined;d.updatedAt=r.headers.get('X-Calculation-Updated-At')??undefined;return d;},
- summary:()=>request<Summary>('/api/v1/analytics/summary'), settings:()=>request<ModelSettings>('/api/v1/model/settings'),
+ summary:()=>request<Summary>('/api/v1/analytics/summary'), forecast:()=>request<Forecast>('/api/v1/analytics/forecast'), settings:()=>request<ModelSettings>('/api/v1/model/settings'),
  updateSettings:(payload:Partial<ModelSettings>&{expectedVersion?:number})=>request<{settings:ModelSettings;summary:Summary}>('/api/v1/model/settings',{method:'PATCH',body:JSON.stringify(payload)}),
  source:()=>request<Snapshot>('/api/v1/source/snapshot'),
  sourceText:async()=>{const r=await requestResponse('/api/v1/source/snapshot');return r.text();},

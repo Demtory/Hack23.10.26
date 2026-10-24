@@ -333,3 +333,36 @@ class CustomerViewOut(CustomerDetailOut):
     calculation: CalculationContext
     as_of: str
     updated_at: str
+
+
+class ForecastFactPoint(APIModel):
+    date: str
+    services: int
+    customers: int
+
+
+class ForecastPoint(APIModel):
+    date: str
+    services: int
+    expected_non_renewals: FiniteFloat
+    expected_loss: FiniteFloat
+
+
+class ForecastTotals(APIModel):
+    fact_services: int
+    fact_customers: int
+    forecast_services: int
+    services_at_risk: int
+    expected_non_renewals: FiniteFloat
+    expected_loss: FiniteFloat
+
+
+class ForecastOut(APIModel):
+    as_of: str
+    past_days: int
+    horizon_days: int
+    currency: str
+    fact: list[ForecastFactPoint]
+    forecast: list[ForecastPoint]
+    totals: ForecastTotals
+    note: str

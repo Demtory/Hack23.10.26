@@ -24,3 +24,25 @@ dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10
 .login__divider{display:flex;align-items:center;gap:12px;margin:2px 0;font-family:Inter,system-ui,sans-serif;font-size:.75rem;color:var(--muted)}
 .login__divider:before,.login__divider:after{content:'';flex:1;border-top:1px solid var(--line)}
 .login__divider span{white-space:nowrap}
+
+/* Прогноз оттока */
+.forecast__legend{display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:18px;font-family:Inter,system-ui,sans-serif;font-size:.75rem;color:var(--muted)}
+.forecast__key{display:inline-flex;align-items:center;gap:8px}
+.forecast__key:before{content:'';width:12px;height:12px;border-radius:3px;display:inline-block}
+.forecast__key--fact:before{background:#182d48}
+.forecast__key--forecast:before{background:#4cc6f1;box-shadow:inset 0 0 0 1px #182d48}
+.forecast__chart{display:grid;grid-template-columns:1fr 34px 1fr;align-items:end;height:190px;gap:0;border-bottom:1px solid var(--line);padding-bottom:2px}
+.forecast__half{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;align-items:end;height:100%;gap:1px}
+.forecast__bar{display:block;min-height:0;border-radius:2px 2px 0 0;align-self:end;width:100%}
+.forecast__bar--fact{background:#182d48}
+.forecast__bar--forecast{background:#4cc6f1;box-shadow:inset 0 0 0 1px #182d48}
+.forecast__divider{display:grid;place-items:center;height:100%;font-family:Inter,sans-serif;font-size:.625rem;color:var(--muted)}
+.forecast__divider span{writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.08em}
+.forecast__axis{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-family:Inter,sans-serif;font-size:.625rem;color:var(--muted)}
+.forecast__totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0 6px}
+.forecast__totals>div{display:grid;gap:2px}
+.forecast__totals span{font-family:Inter,sans-serif;font-size:.6875rem;color:var(--muted)}
+.forecast__totals strong{font-size:1.4rem;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.forecast__totals small{font-size:.6875rem;color:var(--muted)}
+.forecast__note{font-family:Inter,sans-serif;font-size:.625rem;color:var(--muted);margin:10px 0 0;line-height:1.6}
+@media(max-width:560px){.forecast__chart{height:140px;grid-template-columns:1fr 22px 1fr}.forecast__totals{grid-template-columns:1fr;gap:12px}}

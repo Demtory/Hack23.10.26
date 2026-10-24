@@ -164,3 +164,34 @@ export interface User {
   id: number;
   email: string;
 }
+
+export interface ForecastPoint {
+  date: string;
+  services: number;
+  expectedNonRenewals: number;
+  expectedLoss: number;
+}
+
+export interface ForecastFactPoint {
+  date: string;
+  services: number;
+  customers: number;
+}
+
+export interface Forecast {
+  asOf: string;
+  pastDays: number;
+  horizonDays: number;
+  currency: string;
+  fact: ForecastFactPoint[];
+  forecast: ForecastPoint[];
+  totals: {
+    factServices: number;
+    factCustomers: number;
+    forecastServices: number;
+    servicesAtRisk: number;
+    expectedNonRenewals: number;
+    expectedLoss: number;
+  };
+  note: string;
+}

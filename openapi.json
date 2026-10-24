@@ -540,6 +540,69 @@
         ]
       }
     },
+    "/api/v1/analytics/forecast": {
+      "get": {
+        "summary": "Analytics Forecast",
+        "description": "Факт истечений и прогноз непродлений по срокам оплаты.",
+        "operationId": "analytics_forecast_api_v1_analytics_forecast_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pastDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Pastdays"
+            }
+          },
+          {
+            "name": "horizonDays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 30,
+              "title": "Horizondays"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/model/settings": {
       "get": {
         "summary": "Read Settings",
@@ -1219,6 +1282,148 @@
           "recipient"
         ],
         "title": "EmailDraftOut"
+      },
+      "ForecastFactPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "services": {
+            "type": "integer",
+            "title": "Services"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "services",
+          "customers"
+        ],
+        "title": "ForecastFactPoint"
+      },
+      "ForecastOut": {
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "title": "Asof"
+          },
+          "pastDays": {
+            "type": "integer",
+            "title": "Pastdays"
+          },
+          "horizonDays": {
+            "type": "integer",
+            "title": "Horizondays"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "fact": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastFactPoint"
+            },
+            "type": "array",
+            "title": "Fact"
+          },
+          "forecast": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastPoint"
+            },
+            "type": "array",
+            "title": "Forecast"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ForecastTotals"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asOf",
+          "pastDays",
+          "horizonDays",
+          "currency",
+          "fact",
+          "forecast",
+          "totals",
+          "note"
+        ],
+        "title": "ForecastOut"
+      },
+      "ForecastPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "services": {
+            "type": "integer",
+            "title": "Services"
+          },
+          "expectedNonRenewals": {
+            "type": "number",
+            "title": "Expectednonrenewals"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "services",
+          "expectedNonRenewals",
+          "expectedLoss"
+        ],
+        "title": "ForecastPoint"
+      },
+      "ForecastTotals": {
+        "properties": {
+          "factServices": {
+            "type": "integer",
+            "title": "Factservices"
+          },
+          "factCustomers": {
+            "type": "integer",
+            "title": "Factcustomers"
+          },
+          "forecastServices": {
+            "type": "integer",
+            "title": "Forecastservices"
+          },
+          "servicesAtRisk": {
+            "type": "integer",
+            "title": "Servicesatrisk"
+          },
+          "expectedNonRenewals": {
+            "type": "number",
+            "title": "Expectednonrenewals"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "factServices",
+          "factCustomers",
+          "forecastServices",
+          "servicesAtRisk",
+          "expectedNonRenewals",
+          "expectedLoss"
+        ],
+        "title": "ForecastTotals"
       },
       "HTTPValidationError": {
         "properties": {

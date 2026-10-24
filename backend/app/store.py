@@ -127,3 +127,14 @@ def run_metadata(conn: sqlite3.Connection) -> dict[str, Any] | None:
 
 def to_iso_now() -> str:
     return iso_z(datetime.now(timezone.utc))
+
+
+def latest_details(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Сохранённые детали последнего расчёта: нужны для прогноза по срокам."""
+    run = latest_run(conn)
+    if run is None:
+        return []
+    rows = conn.execute(
+        "SELECT detail FROM customer_scores WHERE run_id = ? ORDER BY account_id", (run["id"],)
+    ).fetchall()
+    return [json.loads(row["detail"]) for row in rows]
