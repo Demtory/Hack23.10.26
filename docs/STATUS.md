@@ -306,3 +306,6 @@ cookie; добавление metadata/default нового признака вы
   старый Compose, Windows, Apple Silicon, сброс тома.
 - Проверки: `docker compose config -q` без `.env` и с `compose.sso.yaml`;
   `scripts/smoke.sh` на запущенном приложении — 6/6 ok.
+- E2E-конфиг больше не привязан к Windows: `frontend/playwright.config.ts` выбирает
+  `PYTHON` → `.venv` → системный python. `npx playwright test panel.spec.ts` — 7 passed
+  на macOS; в README описаны установка браузеров и пересборка скриншотов.

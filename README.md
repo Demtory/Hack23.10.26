@@ -8,7 +8,7 @@
 (без ML: в данных нет истории и меток), коэффициенты редактируются в панели,
 настройки переживают перезапуск, метрики отдаются в Prometheus.
 
-![Дашборд](docs/screenshots/dashboard.png)
+![Обзор риска](docs/screenshots/02-overview-1440.png)
 
 ---
 
@@ -90,6 +90,10 @@ docker compose -f compose.yaml -f compose.sso.yaml up --build
 пароля, поэтому парольный вход для него запрещён. Новых зависимостей нет — HTTP-клиент
 и проверка RSA на стандартной библиотеке.
 
+Границы: поддерживается только RS256 (дефолт Keycloak/Okta/Google), выход из приложения
+не выполняет Single Logout у провайдера, роли и группы не маппятся. Если сменить
+`APP_PORT` для SSO-демо, добавьте новый redirect URI в realm — иначе провайдер отклонит вход.
+
 ## Что внутри
 
 | Раздел | Ссылка |
@@ -100,6 +104,7 @@ docker compose -f compose.yaml -f compose.sso.yaml up --build
 | План, роли, риски, демо | [`docs/PLAN.md`](docs/PLAN.md) |
 | Профиль реального датасета | [`docs/DATA_NOTES.md`](docs/DATA_NOTES.md) |
 | Статус реализации | [`docs/STATUS.md`](docs/STATUS.md) |
+| Спецификации по этапам (Spec Kit) | [`specs/`](specs) — 001 модель, 002 данные/UI, 003 панель, 004 тексты и письмо, 005 SSO |
 
 ---
 
@@ -115,6 +120,7 @@ docker compose -f compose.yaml -f compose.sso.yaml up --build
 7. `curl localhost:8000/metrics` → цифры совпадают с UI.
 8. «Данные»: загрузить `data/raw/data.json` (или изменённый) → пересчёт.
 9. `curl` без cookie → 401; `/api/v1/docs` → Swagger.
+10. SSO (если поднят оверлей): «Войти через Keycloak» → дашборд под `marketer@example.test`.
 
 ---
 
@@ -170,7 +176,8 @@ score 75, P ≈ 0.697, ожидаемые потери ≈ €5.51.
   чтобы `active` были в будущем, `prolong_wait` — в пределах 5 дней.
 - Аккаунт 6 в seed сделан «без денег» (€3), чтобы показать сценарий
   «не хватает на продление». Исходный `data/raw/data.json` не изменён.
-- `AS_OF` в `.env` фиксирует время снимка; без него берётся `asOf` из seed.
+- `AS_OF` фиксирует время снимка: в compose есть демо-умолчание, переопределяется
+  через `.env` или переменные окружения; без него берётся `asOf` из seed.
   Для реального времени: `AS_OF=now`.
 - `PUT /api/v1/source/snapshot` принимает **точный формат `data.json`**
   (camelCase), так что жюри может загрузить исходный файл.
@@ -183,16 +190,21 @@ score 75, P ≈ 0.697, ожидаемые потери ≈ €5.51.
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Вход |
+| POST | `/api/v1/auth/login` | Вход по паролю |
 | GET | `/api/v1/auth/me` | Текущий пользователь |
 | POST | `/api/v1/auth/logout` | Выход |
-| GET | `/api/v1/customers` | Список, сортировка, фильтры |
-| GET | `/api/v1/customers/{id}` | Детали, причины, деньги |
+| GET | `/api/v1/auth/oidc/config` | Включён ли SSO и как называется кнопка |
+| GET | `/api/v1/auth/oidc/start` | Редирект к провайдеру (Authorization Code + PKCE) |
+| GET | `/api/v1/auth/oidc/callback` | Callback провайдера: проверка токена и сессия |
+| GET | `/api/v1/customers` | Список, сортировка, фильтры, `topLosses` |
+| GET | `/api/v1/customers/{id}` | Детали, причины, письмо клиенту |
+| GET | `/api/v1/customers/export.csv` | Экспорт выбранной группы |
 | GET | `/api/v1/analytics/summary` | Сводка |
 | GET/PATCH | `/api/v1/model/settings` | Коэффициенты |
 | GET/PUT | `/api/v1/source/snapshot` | Снимок данных |
 | GET | `/api/v1/events` | SSE |
 | GET | `/metrics` | Prometheus |
+| GET | `/healthz` | Проверка живости |
 | GET | `/api/v1/docs` | Swagger |
 
 OpenAPI-файл: [`openapi.json`](openapi.json).
@@ -227,6 +239,8 @@ JSON Schema не различает100 и100.0; это ограничение д
 
 ## Локальная разработка
 
+Нужны Python 3.12 и Node 22+ (только для разработки; для запуска достаточно Docker).
+
 Backend:
 
 ```bash
@@ -239,9 +253,21 @@ Frontend:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev   # http://localhost:5173, proxy на :8000
 ```
+
+E2E (опционально, нужны браузеры Playwright):
+
+```bash
+cd frontend
+npx playwright install chromium
+npx playwright test panel.spec.ts   # 7 проверок интерфейса
+```
+
+Конфиг сам находит Python: `PYTHON`, затем `.venv` проекта, затем системный `python3`.
+Скриншоты для README пересобирает `npx playwright test capture-screens.spec.ts` —
+он перезаписывает файлы в `docs/screenshots/`.
 
 Тесты:
 
@@ -265,6 +291,22 @@ npm --prefix frontend run build
 
 ```bash
 PYTHONPATH=backend .venv/bin/python scripts/export_openapi.py
+```
+
+Проверить запущенное приложение без браузера:
+
+```bash
+./scripts/smoke.sh http://localhost:8000
+```
+
+CI на каждый push (`.github/workflows/ci.yml`): pytest и генератор данных,
+синхронность `openapi.json`, `tsc && vite build`, валидность обоих compose-файлов
+и `docker build`. Локально те же проверки:
+
+```bash
+PYTHONPATH=backend .venv/bin/python -m pytest -q backend/tests data/raw/test_generate.py
+npm --prefix frontend run build
+git diff --exit-code openapi.json
 ```
 
 ---
