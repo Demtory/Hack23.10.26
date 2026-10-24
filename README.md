@@ -54,6 +54,7 @@ docker compose down -v
 | Профиль реального датасета | [`docs/DATA_NOTES.md`](docs/DATA_NOTES.md) |
 | Статус реализации | [`docs/STATUS.md`](docs/STATUS.md) |
 | Идеальный конечный результат и UX-принципы | [`docs/IDEAL_RESULT.md`](docs/IDEAL_RESULT.md) |
+| Демо-сценарий на 5 минут | [`docs/DEMO.md`](docs/DEMO.md) |
 
 ---
 
