@@ -372,6 +372,20 @@ git diff --exit-code openapi.json
 
 ---
 
+## Скриншоты
+
+| | |
+|---|---|
+| ![Клиенты](docs/screenshots/03-customers-urgency-7d.png) | ![Карточка клиента](docs/screenshots/04-customer-card.png) |
+| Список с фильтрами и срочностью | Карточка: причина, деньги, действие |
+| ![Письмо клиенту](docs/screenshots/10-email-dialog.png) | ![Вход через SSO](docs/screenshots/11-login-sso.png) |
+| Черновик письма под ситуацию | Вход по паролю или через OIDC |
+
+Остальные экраны — в [`docs/screenshots/`](docs/screenshots): настройки модели,
+данные, планшет 768 px, меню-дровер, мобильный 360 px.
+
+---
+
 ## Команда
 
 Роли и тайминг — в [`docs/PLAN.md`](docs/PLAN.md).

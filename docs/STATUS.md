@@ -18,12 +18,12 @@
 | `/metrics` в формате Prometheus | ✅ | `GET /metrics` |
 | Согласованность UI / summary / metrics | ✅ | один `score_runs` + `customer_scores` |
 | Docker Compose | ✅ | `compose.yaml` |
-| Аутентификация | ✅ | login/me/logout, cookie, 401 |
+| Аутентификация | ✅ | login/me/logout, cookie, Bearer, 401; OIDC SSO — опционально |
 | Swagger + OpenAPI-файл | ✅ | `/api/v1/docs`, `openapi.json` |
 | README + модель + архитектура + «как добавить признак» | ✅ | `README.md`, `docs/` |
 | Расширяемость признаков | ✅ | `FEATURES_META`, `backend/app/scoring.py` |
 | Комментарий `Aéza` | ✅ | `backend/app/main.py`, `Dockerfile` |
-| Тесты | ✅ | `backend/tests` + генератор, 246 passed (см. ниже) |
+| Тесты | ✅ | `backend/tests` + генератор, 421 passed; E2E 7 passed (см. ниже) |
 
 ## Ещё не сделано (P1/P2)
 
@@ -36,12 +36,11 @@
 ## Быстрая проверка
 
 ```bash
-cp .env.example .env
-docker compose up --build
+./scripts/bootstrap.sh      # или: docker compose up --build
 # http://localhost:8000 — admin@example.test / admin123
 
+./scripts/smoke.sh          # healthz, метрики, 401, панель, логин, сессия
 curl -s localhost:8000/metrics | head
-curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/v1/customers   # 401
 ```
 
 ```bash
