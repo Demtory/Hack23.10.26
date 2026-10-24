@@ -298,10 +298,10 @@ def build() -> Path:
         rect(slide, x, 2.45, 2.62, 1.55, BG, radius=True)
         text(slide, x + 0.2, 2.65, 2.35, 0.4, head, 20, bold=True, font=HEAD)
         text(slide, x + 0.2, 3.15, 2.35, 0.75, body, 10.5, color=MUTED)
-    bullets(slide, MARGIN, 4.35, 6.4, 2.2, [
+    bullets(slide, MARGIN, 4.35, 6.4, 2.3, [
+        (0, "10 000 клиентов: пересчёт 3,1 с, список p95 24 мс"),
         (0, "Prometheus /metrics и Swagger /api/v1/docs"),
         (0, "Настройки и снимок переживают перезапуск"),
-        (0, "Изменения атомарны: ошибка не оставляет полу-состояния"),
     ], size=14, gap=10)
     image(slide, SHOTS / "11-login-sso.png", 8.2, 4.15, 4.05)
     note(slide, "Здесь добиваем инженерные критерии: Docker, тесты, метрики, auth, документация.")

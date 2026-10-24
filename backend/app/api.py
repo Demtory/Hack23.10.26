@@ -467,6 +467,9 @@ def analytics_summary(
     return _summary_api(_ensure_summary(conn, config))
 
 
+_FORECAST_CACHE: dict[tuple[str, int, int, int], dict[str, Any]] = {}
+
+
 @router.get("/analytics/forecast", response_model=ForecastOut)
 def analytics_forecast(
     past_days: int = Query(30, ge=1, le=90, alias="pastDays"),
@@ -477,6 +480,11 @@ def analytics_forecast(
 ) -> dict[str, Any]:
     """Факт истечений и прогноз непродлений по срокам оплаты."""
     summary = _ensure_summary(conn, config)
+    run = latest_run(conn)
+    cache_key = (str(config.db_path), int(run["id"]) if run else 0, past_days, horizon_days)
+    cached = _FORECAST_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     with read_transaction(conn):
         settings, _version, _updated = get_settings(conn)
         details = latest_details(conn)
@@ -493,6 +501,9 @@ def analytics_forecast(
     ]
     totals = data["totals"]
     totals["expectedLoss"] = euros(totals.pop("expectedLossCents"))
+    if len(_FORECAST_CACHE) > 16:
+        _FORECAST_CACHE.clear()
+    _FORECAST_CACHE[cache_key] = data
     return data
 
 
