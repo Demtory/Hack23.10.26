@@ -6,6 +6,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
 SQLiteInt = Annotated[int, Field(ge=-(2**63), le=2**63 - 1)]
+MoneyCents = Annotated[int, Field(strict=True, ge=0, le=2**63 - 1,
+    description='Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected.')]
 
 PAYMENT_TERMS = ("hour", "week", "month", "quarter_year", "half_year", "year")
 SERVICE_STATUSES = ("active", "blocked", "deleted", "suspended", "prolong_wait")
@@ -27,10 +29,10 @@ class APIModel(BaseModel):
 class AccountIn(APIModel):
     id: SQLiteInt
     email: str = Field(min_length=3, max_length=320)
-    balance: SQLiteInt = Field(ge=0)
-    withdraw_balance: SQLiteInt = Field(ge=0)
-    total_replenished: SQLiteInt = Field(ge=0)
-    bonus_balance: SQLiteInt = Field(ge=0)
+    balance: MoneyCents
+    withdraw_balance: MoneyCents
+    total_replenished: MoneyCents
+    bonus_balance: MoneyCents
     bonus_state: Literal["locked", "unlocked"]
 
 
@@ -43,7 +45,7 @@ class ServiceIn(APIModel):
     created_at: datetime
     expires_at: datetime
     status: Literal["active", "blocked", "deleted", "suspended", "prolong_wait"]
-    price: SQLiteInt = Field(ge=0)
+    price: MoneyCents
 
     @field_validator("created_at", "expires_at")
     @classmethod
@@ -61,7 +63,7 @@ class ServiceIn(APIModel):
 
 class TransactionIn(APIModel):
     id: SQLiteInt
-    amount: SQLiteInt = Field(ge=0, le=1000)
+    amount: MoneyCents
     status: Literal["performed", "not_performed"]
     performed_at: datetime | None = None
     created_at: datetime
@@ -252,3 +254,56 @@ def detail_response(customer: dict[str, Any]) -> dict[str, Any]:
     }
 
     return CustomerDetailOut.model_validate(payload).model_dump(by_alias=True, exclude_unset=True)
+
+
+class EffectiveThresholds(APIModel):
+    medium: FiniteFloat
+    high: FiniteFloat
+
+
+class CalculationContext(APIModel):
+    run_id: SQLiteInt
+    settings_version: SQLiteInt
+    thresholds: EffectiveThresholds
+
+
+class SummaryBase(APIModel):
+    counts_by_level: dict[str, int]
+    total_customers: int
+    scored_customers: int
+    services_at_risk: int
+    expected_loss: FiniteFloat
+    amount_at_risk: FiniteFloat
+    coverage: FiniteFloat
+    aggregate_coverage: FiniteFloat
+    underfunded_customers: int
+    avg_score: FiniteFloat | None
+    as_of: str
+    updated_at: str
+    currency: str
+
+
+class SummaryOut(SummaryBase):
+    calculation: CalculationContext
+
+
+class CustomerListItemOut(APIModel):
+    id: SQLiteInt
+    email: str
+    balance: FiniteFloat
+    total_replenished: FiniteFloat
+    score: FiniteFloat | None
+    level: Literal['high', 'medium', 'low', 'unknown']
+    expected_loss: FiniteFloat
+    amount_at_risk: FiniteFloat
+    services_at_risk: int
+
+
+class CustomerPageOut(APIModel):
+    items: list[CustomerListItemOut]
+    total: int
+    page: int
+    page_size: int
+    top_losses: list[CustomerListItemOut] = Field(max_length=5)
+    summary: SummaryBase
+    calculation: CalculationContext

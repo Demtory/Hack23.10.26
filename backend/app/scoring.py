@@ -22,6 +22,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "recomputeIntervalSec": 300,
 }
 
+# Immutable baseline; future additive generations must be declared explicitly.
+FEATURE_GENERATIONS = {1: frozenset({
+    "expiry_pressure", "funds_gap", "autorenew_off", "status_pressure", "payment_history", "commitment",
+})}
+
 FEATURES_META = [
     {
         "code": "expiry_pressure",
@@ -35,7 +40,7 @@ FEATURES_META = [
     {
         "code": "funds_gap",
         "title": "Нехватка денег",
-        "description": "Хватает ли баланса на ближайшее продление",
+        "description": "Сравнение доступного баланса с ценой одной услуги",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -44,7 +49,7 @@ FEATURES_META = [
     {
         "code": "autorenew_off",
         "title": "Автопродление отключено",
-        "description": "Клиент сам отключил автоматическое продление",
+        "description": "Автоматическое продление отключено; намерение клиента неизвестно",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,
@@ -71,7 +76,7 @@ FEATURES_META = [
     {
         "code": "commitment",
         "title": "Лояльность",
-        "description": "Отношение пополнений к стоимости услуг",
+        "description": "1 − min(1, пополнения / (3 × сумма цен услуг))",
         "min": 0.0,
         "max": 1.0,
         "step": 0.01,

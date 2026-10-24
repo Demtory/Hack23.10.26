@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { api, ApiError } from "../api";
-import type { CustomerListItem, Level, Summary } from "../types";
+import type { CustomerListItem, CustomerPage, Level, Summary } from "../types";
 import { dateTime, EmptyState, ErrorBox, LevelBadge, money, number, servicesWord, Spinner } from "../components/ui";
 
 type SortKey = "id" | "email" | "balance" | "totalReplenished" | "score" | "expectedLoss";
@@ -24,9 +24,11 @@ const LEVELS: { key: Level | ""; label: string }[] = [
 ];
 
 export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => void; liveTick: number }) {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [items, setItems] = useState<CustomerListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [view, setView] = useState<CustomerPage | null>(null);
+  const summary = view?.summary ?? null;
+  const items = view?.items ?? [];
+  const total = view?.total ?? 0;
+  const topLosses = view?.topLosses ?? [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("score");
@@ -38,27 +40,13 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .summary()
-      .then((value) => {
-        if (!cancelled) setSummary(value);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [liveTick]);
-
-  useEffect(() => {
-    let cancelled = false;
     setLoading(true);
     setError(null);
     api
       .customers({ sort, order, level, q: query, page, pageSize })
       .then((value) => {
         if (cancelled) return;
-        setItems(value.items);
-        setTotal(value.total);
+        setView(value);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Не удалось загрузить клиентов");
@@ -75,14 +63,7 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
     setPage(1);
   }, [level, query, sort, order]);
 
-  const maxLoss = useMemo(
-    () => Math.max(0, ...items.map((item) => item.expectedLoss)),
-    [items],
-  );
-  const topLosses = useMemo(
-    () => [...items].sort((a, b) => b.expectedLoss - a.expectedLoss).slice(0, 5),
-    [items],
-  );
+  const maxLoss = Math.max(0, ...topLosses.map((item) => item.expectedLoss));
   const counts = summary?.countsByLevel;
   const totalCount = counts ? counts.high + counts.medium + counts.low + counts.unknown : 0;
 
@@ -115,6 +96,7 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
 
       {error ? <ErrorBox message={error} /> : null}
 
+      <p className="muted">Сводка по всем клиентам</p>
       <section className="summary-grid">
         <article className="card card--hero">
           <p className="card__label">Ожидаемые потери</p>
@@ -124,7 +106,7 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
         <article className="card">
           <p className="card__label">Платежи под риском</p>
           <p className="card__value">{summary ? money(summary.amountAtRisk) : "—"}</p>
-          <p className="card__hint">услуги, у которых score ≥ 40</p>
+          <p className="card__hint">услуги, у которых score ≥ {view?.calculation.thresholds.medium ?? "—"}</p>
         </article>
         <article className="card">
           <p className="card__label">Высокий риск</p>
@@ -178,7 +160,7 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
               <p className="card__label">Деньги</p>
               <h2>Кто даёт потери</h2>
             </div>
-            <span className="card__meta">топ-5</span>
+            <span className="card__meta">топ-5 · текущая выборка</span>
           </div>
           <div className="bars">
             {topLosses.length === 0 ? <p className="muted">Нет данных</p> : null}

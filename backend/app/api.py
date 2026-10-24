@@ -10,11 +10,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from fastapi.security import APIKeyCookie
+from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredentials
 
 from .config import Config
-from .db import connect, transaction
-from .schemas import CustomerDetailOut, LoginIn, SettingsPatch, SnapshotIn, detail_response
+from .db import connect, transaction, read_snapshot as read_transaction
+from .schemas import CustomerDetailOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, detail_response
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -34,6 +34,7 @@ from .store import (
 
 router = APIRouter(prefix="/api/v1")
 cookie_scheme = APIKeyCookie(name=SESSION_COOKIE, auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_config(request: Request) -> Config:
@@ -48,15 +49,18 @@ def get_db(request: Request):
         conn.close()
 
 
-def require_user(
-    request: Request,
+def session_token(
     cookie_token: str | None = Depends(cookie_scheme),
+    bearer: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str | None:
+    # A nonempty cookie wins, including when it is expired or invalid.
+    return cookie_token or (bearer.credentials if bearer else None)
+
+
+def require_user(
+    token: str | None = Depends(session_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
-    token = cookie_token or request.cookies.get(SESSION_COOKIE)
-    auth_header = request.headers.get("Authorization")
-    if not token and auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="authentication required")
     user = get_session_user(conn, token)
@@ -73,19 +77,19 @@ def euros(cents: int | float | None) -> float | None:
 
 def _ensure_summary(conn: sqlite3.Connection, config: Config) -> dict[str, Any]:
     summary = latest_summary(conn)
-    if summary is not None:
+    if summary is not None and "calculation" in summary and "thresholds" in summary:
         return summary
     with transaction(conn):
         summary = latest_summary(conn)
-        if summary is None:
+        if summary is None or "calculation" not in summary or "thresholds" not in summary:
             settings, version, _ = get_settings(conn)
             _validate_settings(settings)
             summary = recompute(conn, settings, version, config.as_of)
         return summary
 
 
-def _summary_api(summary: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _summary_api(summary: dict[str, Any], include_context: bool = True) -> dict[str, Any]:
+    payload = {
         "countsByLevel": summary["countsByLevel"],
         "totalCustomers": summary["totalCustomers"],
         "scoredCustomers": summary["scoredCustomers"],
@@ -100,6 +104,10 @@ def _summary_api(summary: dict[str, Any]) -> dict[str, Any]:
         "updatedAt": summary["updatedAt"],
         "currency": summary.get("currency", "EUR"),
     }
+    if include_context:
+        payload['calculation'] = summary['calculation']
+    model = SummaryOut if include_context else SummaryBase
+    return model.model_validate(payload).model_dump(by_alias=True)
 
 
 def _settings_api(payload: dict[str, Any], version: int, updated_at: str) -> dict[str, Any]:
@@ -146,13 +154,12 @@ def me(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
     return user
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", openapi_extra={"security": [{}]})
 def logout(
-    request: Request,
     response: Response,
+    token: str | None = Depends(session_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, bool]:
-    token = request.cookies.get(SESSION_COOKIE)
     if token:
         delete_session(conn, token)
     response.delete_cookie(SESSION_COOKIE, path="/")
@@ -172,77 +179,56 @@ CUSTOMER_SORTS = {
 }
 
 
-@router.get("/customers")
+def _list_item(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        'id': int(row['id']), 'email': row['email'], 'balance': euros(row['balance']),
+        'totalReplenished': euros(row['total_replenished']), 'score': row['score'],
+        'level': row['level'], 'expectedLoss': euros(row['expected_loss']),
+        'amountAtRisk': euros(row['amount_at_risk']), 'servicesAtRisk': int(row['services_at_risk']),
+    }
+
+
+@router.get('/customers', response_model=CustomerPageOut)
 def customers(
-    sort: str = Query("score"),
-    order: str | None = Query(None),
-    level: str | None = Query(None),
-    q: str | None = Query(None),
-    page: int = Query(1, ge=1),
-    pageSize: int = Query(25, ge=1, le=100),
-    config: Config = Depends(get_config),
-    conn: sqlite3.Connection = Depends(get_db),
+    sort: str = Query('score'), order: str | None = Query(None),
+    level: str | None = Query(None), q: str | None = Query(None),
+    page: int = Query(1, ge=1), pageSize: int = Query(25, ge=1, le=100),
+    config: Config = Depends(get_config), conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     if sort not in CUSTOMER_SORTS:
-        raise HTTPException(status_code=422, detail=f"unsupported sort: {sort}")
-    if level is not None and level not in {"high", "medium", "low", "unknown"}:
-        raise HTTPException(status_code=422, detail=f"unsupported level: {level}")
-    direction = (order or ("desc" if sort in {"score", "expectedLoss"} else "asc")).lower()
-    if direction not in {"asc", "desc"}:
-        raise HTTPException(status_code=422, detail="order must be asc or desc")
+        raise HTTPException(status_code=422, detail=f'unsupported sort: {sort}')
+    if level is not None and level not in {'high', 'medium', 'low', 'unknown'}:
+        raise HTTPException(status_code=422, detail=f'unsupported level: {level}')
+    direction = (order or ('desc' if sort in {'score', 'expectedLoss'} else 'asc')).lower()
+    if direction not in {'asc','desc'}:
+        raise HTTPException(status_code=422, detail='order must be asc or desc')
     _ensure_summary(conn, config)
-    run = latest_run(conn)
-    assert run is not None
-
-    where = ["cs.run_id = ?"]
-    params: list[Any] = [run["id"]]
-    if level:
-        where.append("cs.level = ?")
-        params.append(level)
-    if q:
-        where.append("lower(a.email) LIKE ?")
-        params.append(f"%{q.lower()}%")
-    where_sql = " AND ".join(where)
-
-    total = conn.execute(
-        f"SELECT count(*) AS n FROM customer_scores cs JOIN accounts a ON a.id = cs.account_id WHERE {where_sql}",
-        params,
-    ).fetchone()["n"]
-
-    expression = CUSTOMER_SORTS[sort]
-    if sort == "score":
-        order_sql = f"CASE WHEN cs.score IS NULL THEN 1 ELSE 0 END ASC, cs.score {direction.upper()}"
-    else:
-        order_sql = f"{expression} {direction.upper()}"
-    offset = (page - 1) * pageSize
-    rows = conn.execute(
-        f"""
-        SELECT cs.account_id AS id, a.email, a.balance, a.total_replenished,
-               cs.score, cs.level, cs.expected_loss, cs.amount_at_risk, cs.services_at_risk
-        FROM customer_scores cs JOIN accounts a ON a.id = cs.account_id
-        WHERE {where_sql}
-        ORDER BY {order_sql}, a.id ASC
-        LIMIT ? OFFSET ?
-        """,
-        [*params, pageSize, offset],
-    ).fetchall()
-
-    items = [
-        {
-            "id": int(row["id"]),
-            "email": row["email"],
-            "balance": euros(row["balance"]),
-            "totalReplenished": euros(row["total_replenished"]),
-            "score": row["score"],
-            "level": row["level"],
-            "expectedLoss": euros(row["expected_loss"]),
-            "amountAtRisk": euros(row["amount_at_risk"]),
-            "servicesAtRisk": int(row["services_at_risk"]),
-        }
-        for row in rows
-    ]
-    return {"items": items, "total": int(total), "page": page, "pageSize": pageSize}
+    with read_transaction(conn):
+        run = latest_run(conn)
+        assert run is not None
+        summary = json.loads(run['summary'])
+        where = ['cs.run_id = ?']
+        params: list[Any] = [run['id']]
+        if level:
+            where.append('cs.level = ?'); params.append(level)
+        if q:
+            where.append('lower(a.email) LIKE ?'); params.append(f'%{q.lower()}%')
+        where_sql = ' AND '.join(where)
+        source = 'FROM customer_scores cs JOIN accounts a ON a.id = cs.account_id WHERE ' + where_sql
+        total = conn.execute('SELECT count(*) AS n ' + source, params).fetchone()['n']
+        columns = ('SELECT cs.account_id AS id, a.email, a.balance, a.total_replenished, '
+                   'cs.score, cs.level, cs.expected_loss, cs.amount_at_risk, cs.services_at_risk ')
+        order_sql = (f'CASE WHEN cs.score IS NULL THEN 1 ELSE 0 END ASC, cs.score {direction.upper()}'
+                     if sort == 'score' else f'{CUSTOMER_SORTS[sort]} {direction.upper()}')
+        rows = conn.execute(columns + source + f' ORDER BY {order_sql}, a.id ASC LIMIT ? OFFSET ?',
+                            [*params, pageSize, (page-1)*pageSize]).fetchall()
+        top = conn.execute(columns + source + ' ORDER BY cs.expected_loss DESC, a.id ASC LIMIT 5', params).fetchall()
+        return CustomerPageOut.model_validate({
+            'items': [_list_item(row) for row in rows], 'total': total, 'page': page, 'pageSize': pageSize,
+            'topLosses': [_list_item(row) for row in top], 'summary': _summary_api(summary, False),
+            'calculation': summary['calculation'],
+        }).model_dump(by_alias=True)
 
 
 @router.get("/customers/{id}", response_model=CustomerDetailOut, response_model_exclude_unset=True)
@@ -262,7 +248,7 @@ def customer(
 # ----------------------------------------------------------------------- analytics
 
 
-@router.get("/analytics/summary")
+@router.get("/analytics/summary", response_model=SummaryOut)
 def analytics_summary(
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
@@ -274,9 +260,10 @@ def analytics_summary(
 # --------------------------------------------------------------------------- model
 
 
-def _validate_settings(payload: dict[str, Any]) -> None:
+def _validate_settings(payload: dict[str, Any], known: set[str] | None = None) -> None:
     weights = payload.get("weights", {})
-    known = {feature["code"] for feature in FEATURES_META}
+    if known is None:
+        known = {feature["code"] for feature in FEATURES_META}
     unknown = set(weights) - known
     if unknown:
         raise ValueError(f"unknown feature weights: {sorted(unknown)}")

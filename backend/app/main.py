@@ -13,7 +13,7 @@ from .api import _ensure_summary, _metrics_text, _validate_settings, router
 from .config import ROOT, Config
 from .db import connect, init_db, transaction
 from .security import ensure_admin
-from .seed import ensure_seed, get_settings
+from .seed import ensure_seed, get_settings, validate_saved_money, upgrade_settings
 from .store import recompute
 
 
@@ -29,7 +29,8 @@ def create_app(config: Config | None = None) -> FastAPI:
             with transaction(conn):
                 get_settings(conn)
                 ensure_seed(conn, cfg.seed_path, cfg.seed_on_start)
-                settings, version, _ = get_settings(conn)
+                validate_saved_money(conn)
+                settings, version, _ = upgrade_settings(conn, _validate_settings)
                 _validate_settings(settings)
                 recompute(conn, settings, version, cfg.as_of)
         finally:
@@ -45,6 +46,20 @@ def create_app(config: Config | None = None) -> FastAPI:
         openapi_url="/api/v1/openapi.json",
         lifespan=lifespan,
     )
+    generate_openapi = app.openapi
+
+    def exact_money_openapi():
+        schema = generate_openapi()
+        # FastAPI's OpenAPI model casts numeric bounds to float. Preserve int64
+        # endpoints exactly for consumers of the published money contract.
+        for name, fields in (("AccountIn", ("balance", "withdrawBalance", "totalReplenished", "bonusBalance")),
+                             ("ServiceIn", ("price",)), ("TransactionIn", ("amount",))):
+            for field in fields:
+                prop = schema["components"]["schemas"][name]["properties"][field]
+                prop["minimum"], prop["maximum"] = 0, 2**63 - 1
+        return schema
+
+    app.openapi = exact_money_openapi
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Request, exc: RequestValidationError):
         # Input/ctx can contain NaN, arbitrary objects or sensitive snapshot fields.

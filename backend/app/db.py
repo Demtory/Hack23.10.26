@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     payload TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    feature_schema_version INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS score_runs (
@@ -100,6 +101,9 @@ def connect(path: Path) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)")}
+    if "feature_schema_version" not in columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN feature_schema_version INTEGER NOT NULL DEFAULT 1")
     conn.commit()
 
 
@@ -108,6 +112,18 @@ def transaction(conn: sqlite3.Connection):
     """One owner for source/settings, results and commit, including commit errors."""
     try:
         conn.execute("BEGIN IMMEDIATE")
+        yield
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+
+
+@contextmanager
+def read_snapshot(conn: sqlite3.Connection):
+    """Pin all SELECTs and account joins without taking the writer lock."""
+    try:
+        conn.execute('BEGIN')
         yield
         conn.commit()
     except BaseException:

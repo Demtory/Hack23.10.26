@@ -6,12 +6,13 @@ import { Customer } from "./pages/Customer";
 import { Settings } from "./pages/Settings";
 import { Data } from "./pages/Data";
 import type { User } from "./types";
-import { Spinner } from "./components/ui";
+import { ErrorBox, Spinner } from "./components/ui";
 
 type Page = "dashboard" | "settings" | "data";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("dashboard");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [liveTick, setLiveTick] = useState(0);
@@ -35,13 +36,14 @@ export default function App() {
   }, [user]);
 
   async function logout() {
+    setLogoutError(null);
     try {
       await api.logout();
+      setUser(null);
+      setSelectedId(null);
     } catch (error) {
-      if (!(error instanceof ApiError)) console.error(error);
+      setLogoutError(error instanceof ApiError ? error.message : "Не удалось завершить сессию. Проверьте соединение и повторите выход.");
     }
-    setUser(null);
-    setSelectedId(null);
   }
 
   function navigate(next: Page) {
@@ -107,6 +109,7 @@ export default function App() {
               <span>{user.email}</span>
             </div>
           </div>
+          {logoutError ? <ErrorBox message={logoutError} /> : null}
           <button className="button button--sidebar" onClick={logout}>
             Выйти
           </button>

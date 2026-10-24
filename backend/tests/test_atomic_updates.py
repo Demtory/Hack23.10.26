@@ -1,11 +1,14 @@
 import copy
+import json
 import sqlite3
 import pytest
 from fastapi.testclient import TestClient
-from app import api, store
-from app.db import connect
+from app import api, store, main
+from app.db import connect, transaction
 from app.main import create_app
 from .conftest import database_state, login
+from app.seed import get_settings
+from .test_settings_upgrade import add_feature
 
 
 @pytest.mark.parametrize('verb', ['patch', 'put'])
@@ -176,3 +179,100 @@ def test_write_lock_rejection_preserves_state(session, config, verb):
         locker.rollback();locker.close()
     assert getattr(c,verb)(path,json=payload).status_code==200
     session.restart()
+
+
+@pytest.mark.parametrize('table,column,value', [('accounts', 'balance', -1), ('accounts', 'bonus_balance', 1.5), ('services', 'price', -1), ('transactions', 'amount', -1)])
+def test_bad_persisted_money_refused_002(config, client, table, column, value):
+    with sqlite3.connect(config.db_path) as conn:
+        conn.execute(f'UPDATE {table} SET {column}=? WHERE id=(SELECT min(id) FROM {table})', (value,))
+    before = database_state(config.db_path)
+    with pytest.raises(ValueError, match='money'):
+        with TestClient(create_app(config)):
+            pass
+    assert database_state(config.db_path) == before
+
+
+def test_customer_read_snapshot(client, config, monkeypatch):
+    login(client)
+    original=client.get('/api/v1/customers').json()
+    triggered=False
+    class Hook(sqlite3.Connection):
+        def execute(self, sql, *args, **kwargs):
+            nonlocal triggered
+            result=super().execute(sql,*args,**kwargs)
+            if not triggered and 'count(*)' in sql.lower() and 'customer_scores' in sql.lower():
+                triggered=True
+                w=connect(config.db_path)
+                try:
+                    with transaction(w):
+                        w.execute("UPDATE accounts SET email='new-' || email")
+                        settings,version,_=get_settings(w)
+                        store.recompute(w,settings,version,config.as_of)
+                finally: w.close()
+            return result
+    def hooked(path):
+        c=sqlite3.connect(path,factory=Hook,check_same_thread=False)
+        c.row_factory=sqlite3.Row
+        c.execute('PRAGMA foreign_keys=ON')
+        return c
+    monkeypatch.setattr(api,'connect',hooked)
+    response=client.get('/api/v1/customers')
+    assert response.status_code==200
+    assert triggered
+    assert response.json()==original
+    assert all(x['email'].startswith('new-') for x in client.get('/api/v1/customers').json()['items'])
+
+
+def test_missing_run_context_recomputed_atomically(client,config,monkeypatch):
+    login(client)
+    with sqlite3.connect(config.db_path) as c:
+        row=c.execute('SELECT id,summary FROM score_runs ORDER BY id DESC LIMIT 1').fetchone()
+        summary=json.loads(row[1]);summary.pop('thresholds',None);summary.pop('calculation',None)
+        c.execute('UPDATE score_runs SET summary=? WHERE id=?',(json.dumps(summary),row[0]))
+    before=database_state(config.db_path)
+    original=api.recompute
+    monkeypatch.setattr(api,'recompute',lambda *a,**k: (_ for _ in ()).throw(RuntimeError('fault')))
+    assert client.get('/api/v1/customers').status_code==500
+    assert database_state(config.db_path)==before
+    monkeypatch.setattr(api,'recompute',original)
+    assert client.get('/api/v1/customers').json()['calculation']['runId']>row[0]
+
+
+
+@pytest.mark.parametrize('fault',['save','compute','serialize','commit'])
+def test_upgrade_failure_atomic(session,config,monkeypatch,fault):
+    from app import seed
+    session.stack.close();before=database_state(config.db_path);add_feature(monkeypatch)
+    with monkeypatch.context() as m:
+        if fault=='save':
+            original=seed.save_settings
+            def fail_save(*args):
+                original(*args)
+                assert database_state(config.db_path)==before
+                raise RuntimeError('fault')
+            m.setattr(seed,'save_settings',fail_save)
+        elif fault=='compute':
+            original=main.recompute
+            def fail_compute(*args):
+                original(*args)
+                assert database_state(config.db_path)==before
+                raise RuntimeError('fault')
+            m.setattr(main,'recompute',fail_compute)
+        elif fault=='serialize': m.setattr(store,'detail_response',lambda *a,**k: (_ for _ in ()).throw(RuntimeError('fault')))
+        else:
+            class Fail(sqlite3.Connection):
+                def commit(self):
+                    if self.in_transaction:
+                        assert database_state(config.db_path)==before
+                        raise RuntimeError('fault')
+                    super().commit()
+            def fail_connect(path):
+                c=sqlite3.connect(path,factory=Fail,check_same_thread=False);c.row_factory=sqlite3.Row
+                return c
+            m.setattr(main,'connect',fail_connect)
+        with pytest.raises(RuntimeError,match='fault'):
+            with TestClient(create_app(config)): pass
+    assert database_state(config.db_path)==before
+    after=session.restart().get('/api/v1/model/settings').json()
+    assert after['weights']['future_signal']==0
+    assert session.restart().get('/api/v1/model/settings').json()==after

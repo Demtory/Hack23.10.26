@@ -67,6 +67,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       }
@@ -90,7 +93,16 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {}
+        ]
       }
     },
     "/api/v1/customers": {
@@ -100,6 +112,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ],
         "parameters": [
@@ -191,9 +206,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Customers Api V1 Customers Get"
+                  "$ref": "#/components/schemas/CustomerPageOut"
                 }
               }
             }
@@ -211,23 +224,26 @@
         }
       }
     },
-    "/api/v1/customers/{account_id}": {
+    "/api/v1/customers/{id}": {
       "get": {
         "summary": "Customer",
-        "operationId": "customer_api_v1_customers__account_id__get",
+        "operationId": "customer_api_v1_customers__id__get",
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ],
         "parameters": [
           {
-            "name": "account_id",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Account Id"
+              "title": "Id"
             }
           }
         ],
@@ -265,9 +281,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Analytics Summary Api V1 Analytics Summary Get"
+                  "$ref": "#/components/schemas/SummaryOut"
                 }
               }
             }
@@ -276,6 +290,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       }
@@ -301,6 +318,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       },
@@ -344,6 +364,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       }
@@ -369,6 +392,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       },
@@ -412,6 +438,9 @@
         "security": [
           {
             "APIKeyCookie": []
+          },
+          {
+            "HTTPBearer": []
           }
         ]
       }
@@ -495,27 +524,31 @@
           },
           "balance": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Balance"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Balance",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           },
           "withdrawBalance": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Withdrawbalance"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Withdrawbalance",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           },
           "totalReplenished": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Totalreplenished"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Totalreplenished",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           },
           "bonusBalance": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Bonusbalance"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Bonusbalance",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           },
           "bonusState": {
             "type": "string",
@@ -537,6 +570,32 @@
           "bonusState"
         ],
         "title": "AccountIn"
+      },
+      "CalculationContext": {
+        "properties": {
+          "runId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Runid"
+          },
+          "settingsVersion": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Settingsversion"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/EffectiveThresholds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runId",
+          "settingsVersion",
+          "thresholds"
+        ],
+        "title": "CalculationContext"
       },
       "CustomerDetailOut": {
         "properties": {
@@ -667,6 +726,122 @@
         ],
         "title": "CustomerDetailOut"
       },
+      "CustomerListItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": -9.223372036854776e+18,
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "balance": {
+            "type": "number",
+            "title": "Balance"
+          },
+          "totalReplenished": {
+            "type": "number",
+            "title": "Totalreplenished"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ],
+            "title": "Level"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "amountAtRisk": {
+            "type": "number",
+            "title": "Amountatrisk"
+          },
+          "servicesAtRisk": {
+            "type": "integer",
+            "title": "Servicesatrisk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "totalReplenished",
+          "score",
+          "level",
+          "expectedLoss",
+          "amountAtRisk",
+          "servicesAtRisk"
+        ],
+        "title": "CustomerListItemOut"
+      },
+      "CustomerPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerListItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "pageSize": {
+            "type": "integer",
+            "title": "Pagesize"
+          },
+          "topLosses": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerListItemOut"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Toplosses"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SummaryBase"
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/CalculationContext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "topLosses",
+          "summary",
+          "calculation"
+        ],
+        "title": "CustomerPageOut"
+      },
       "DriverOut": {
         "properties": {
           "code": {
@@ -700,6 +875,24 @@
           "contribution"
         ],
         "title": "DriverOut"
+      },
+      "EffectiveThresholds": {
+        "properties": {
+          "medium": {
+            "type": "number",
+            "title": "Medium"
+          },
+          "high": {
+            "type": "number",
+            "title": "High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "medium",
+          "high"
+        ],
+        "title": "EffectiveThresholds"
       },
       "HTTPValidationError": {
         "properties": {
@@ -985,9 +1178,10 @@
           },
           "price": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Price"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Price",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           }
         },
         "type": "object",
@@ -1230,6 +1424,176 @@
         "title": "SnapshotIn",
         "description": "Full replacement: all arrays and required fields must be explicit; 0/false are valid."
       },
+      "SummaryBase": {
+        "properties": {
+          "countsByLevel": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Countsbylevel"
+          },
+          "totalCustomers": {
+            "type": "integer",
+            "title": "Totalcustomers"
+          },
+          "scoredCustomers": {
+            "type": "integer",
+            "title": "Scoredcustomers"
+          },
+          "servicesAtRisk": {
+            "type": "integer",
+            "title": "Servicesatrisk"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "amountAtRisk": {
+            "type": "number",
+            "title": "Amountatrisk"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "aggregateCoverage": {
+            "type": "number",
+            "title": "Aggregatecoverage"
+          },
+          "underfundedCustomers": {
+            "type": "integer",
+            "title": "Underfundedcustomers"
+          },
+          "avgScore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avgscore"
+          },
+          "asOf": {
+            "type": "string",
+            "title": "Asof"
+          },
+          "updatedAt": {
+            "type": "string",
+            "title": "Updatedat"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "countsByLevel",
+          "totalCustomers",
+          "scoredCustomers",
+          "servicesAtRisk",
+          "expectedLoss",
+          "amountAtRisk",
+          "coverage",
+          "aggregateCoverage",
+          "underfundedCustomers",
+          "avgScore",
+          "asOf",
+          "updatedAt",
+          "currency"
+        ],
+        "title": "SummaryBase"
+      },
+      "SummaryOut": {
+        "properties": {
+          "countsByLevel": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Countsbylevel"
+          },
+          "totalCustomers": {
+            "type": "integer",
+            "title": "Totalcustomers"
+          },
+          "scoredCustomers": {
+            "type": "integer",
+            "title": "Scoredcustomers"
+          },
+          "servicesAtRisk": {
+            "type": "integer",
+            "title": "Servicesatrisk"
+          },
+          "expectedLoss": {
+            "type": "number",
+            "title": "Expectedloss"
+          },
+          "amountAtRisk": {
+            "type": "number",
+            "title": "Amountatrisk"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "aggregateCoverage": {
+            "type": "number",
+            "title": "Aggregatecoverage"
+          },
+          "underfundedCustomers": {
+            "type": "integer",
+            "title": "Underfundedcustomers"
+          },
+          "avgScore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avgscore"
+          },
+          "asOf": {
+            "type": "string",
+            "title": "Asof"
+          },
+          "updatedAt": {
+            "type": "string",
+            "title": "Updatedat"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "calculation": {
+            "$ref": "#/components/schemas/CalculationContext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "countsByLevel",
+          "totalCustomers",
+          "scoredCustomers",
+          "servicesAtRisk",
+          "expectedLoss",
+          "amountAtRisk",
+          "coverage",
+          "aggregateCoverage",
+          "underfundedCustomers",
+          "avgScore",
+          "asOf",
+          "updatedAt",
+          "currency",
+          "calculation"
+        ],
+        "title": "SummaryOut"
+      },
       "ThresholdsPatch": {
         "properties": {
           "medium": {
@@ -1273,9 +1637,10 @@
           },
           "amount": {
             "type": "integer",
-            "maximum": 9.223372036854776e+18,
-            "minimum": -9.223372036854776e+18,
-            "title": "Amount"
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "title": "Amount",
+            "description": "Whole JSON integer eurocents only; strings, booleans, decimal/exponent literals (100.0, 1e2) are rejected."
           },
           "status": {
             "type": "string",
@@ -1374,6 +1739,10 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "sid"
+      },
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }

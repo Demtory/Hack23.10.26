@@ -84,7 +84,14 @@ export interface CountsByLevel {
   unknown: number;
 }
 
+export interface CalculationContext {
+  runId: number;
+  settingsVersion: number;
+  thresholds: { medium: number; high: number };
+}
+
 export interface Summary {
+  calculation?: CalculationContext;
   countsByLevel: CountsByLevel;
   totalCustomers: number;
   scoredCustomers: number;
@@ -123,6 +130,9 @@ export interface ModelSettings {
 }
 
 export interface CustomerPage {
+  topLosses: CustomerListItem[];
+  summary: Summary;
+  calculation: CalculationContext;
   items: CustomerListItem[];
   total: number;
   page: number;

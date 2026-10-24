@@ -5,6 +5,7 @@ import { dateTime, ErrorBox, money, Spinner } from "../components/ui";
 
 export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSnapshotUploaded?: () => void }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [snapshotText, setSnapshotText] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -13,10 +14,11 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.source(), api.summary()])
+    Promise.all([api.sourceText(), api.summary()])
       .then(([source, currentSummary]) => {
         if (cancelled) return;
-        setSnapshot(source);
+        setSnapshot(JSON.parse(source) as Snapshot);
+        setSnapshotText(source);
         setSummary(currentSummary);
       })
       .catch((err) => {
@@ -37,9 +39,17 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
       if (!Array.isArray(parsed.accounts) || !Array.isArray(parsed.services) || !Array.isArray(parsed.transactions)) {
         throw new Error("Ожидается объект с массивами accounts, services, transactions");
       }
-      const result = await api.replaceSource(parsed);
+      const result = await api.replaceSourceText(text);
       setSummary(result.summary);
       setSnapshot(parsed);
+      setSnapshotText(null);
+      try {
+        const saved = await api.sourceText();
+        setSnapshot(JSON.parse(saved) as Snapshot);
+        setSnapshotText(saved);
+      } catch {
+        setError("Снимок сохранён, но не удалось прочитать текущий JSON. Обновите страницу перед скачиванием.");
+      }
       onSnapshotUploaded?.();
       setStatus(
         `Снимок заменён: ${result.counts.accounts} аккаунтов, ${result.counts.services} услуг, ${result.counts.transactions} транзакций. Модель пересчитана.`,
@@ -53,8 +63,8 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
   }
 
   function download() {
-    if (!snapshot) return;
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    if (!snapshotText) return;
+    const blob = new Blob([snapshotText], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -78,7 +88,7 @@ export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSna
             После загрузки модель пересчитывается автоматически.
           </p>
         </div>
-        <button className="button button--ghost" onClick={download} disabled={!snapshot}>
+        <button className="button button--ghost" onClick={download} disabled={!snapshotText}>
           Скачать текущий JSON
         </button>
       </header>

@@ -143,3 +143,50 @@ def test_maximum_sqlite_balance_is_accepted(client, full_snapshot):
     full_snapshot['accounts'][0]['balance']=2**63-1
     assert client.put('/api/v1/source/snapshot',json=full_snapshot).status_code==200
     assert client.get('/api/v1/source/snapshot').json()['accounts'][0]['balance']==2**63-1
+
+
+# 002: strict source money and full-state preservation.
+MONEY_FIELDS_002 = [('accounts', k) for k in ('balance', 'withdrawBalance', 'totalReplenished', 'bonusBalance')] + [('services', 'price'), ('transactions', 'amount')]
+
+@pytest.mark.parametrize('entity,field', MONEY_FIELDS_002)
+@pytest.mark.parametrize('literal', ['-1', 'true', 'false', '"100"', '100.0', '1e2', '100.5', 'null', '9223372036854775808'])
+def test_money_literal_contract_002(session, config, full_snapshot, entity, field, literal):
+    from .conftest import database_state
+    import json
+    snapshot = full_snapshot
+    snapshot[entity][0][field] = '__money_literal__'
+    raw = json.dumps(snapshot).replace('"__money_literal__"', literal)
+    before = database_state(config.db_path)
+    response = session.client.put('/api/v1/source/snapshot', content=raw, headers={'Content-Type': 'application/json'})
+    assert response.status_code == 422
+    assert any(field in e['loc'] for e in response.json()['detail'])
+    assert all('input' not in e and 'ctx' not in e for e in response.json()['detail'])
+    assert database_state(config.db_path) == before
+    session.restart()
+    snapshot[entity][0][field] = 100
+    assert session.client.put('/api/v1/source/snapshot', json=snapshot).status_code == 200
+
+
+@pytest.mark.parametrize('entity,field', MONEY_FIELDS_002)
+@pytest.mark.parametrize('value', [0, 100])
+def test_money_zero_and_integer_002(client, full_snapshot, entity, field, value):
+    from .conftest import login
+    login(client)
+    full_snapshot[entity][0][field] = value
+    assert client.put('/api/v1/source/snapshot', json=full_snapshot).status_code == 200
+    assert client.get('/api/v1/source/snapshot').json()[entity][0][field] == value
+
+
+@pytest.mark.parametrize('entity,field', MONEY_FIELDS_002)
+def test_money_input_upper_bound_002(full_snapshot, entity, field):
+    from app.schemas import SnapshotIn
+    full_snapshot[entity][0][field] = 2**63 - 1
+    SnapshotIn.model_validate(full_snapshot)
+
+
+@pytest.mark.parametrize('amount', [1000, 1001, 5000, 9007199254740993, 2**63 - 1])
+def test_money_large_amount_roundtrip_002(session, full_snapshot, amount):
+    full_snapshot['transactions'][0]['amount'] = amount
+    assert session.client.put('/api/v1/source/snapshot', json=full_snapshot).status_code == 200
+    session.restart()
+    assert session.client.get('/api/v1/source/snapshot').json()['transactions'][0]['amount'] == amount

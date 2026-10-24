@@ -182,7 +182,7 @@ export function Customer({
                     </div>
                     <div>
                       <dt>Услуг под риском</dt>
-                      <dd>{customer.services.filter((service) => service.score >= 40).length}</dd>
+                      <dd>{customer.services.filter((service) => service.level === "medium" || service.level === "high").length}</dd>
                     </div>
                     <div>
                       <dt>Покрыто балансом</dt>

@@ -25,6 +25,7 @@ def recompute(
     transactions = _rows(conn, "SELECT * FROM transactions ORDER BY id")
     result = compute(accounts, services, transactions, settings, as_of, datetime.now(timezone.utc))
     summary = result["summary"]
+    summary["thresholds"] = dict(settings["thresholds"])
 
     # Fail before any publication on non-finite JSON or an unrepresentable SQL value.
     json.dumps(result, ensure_ascii=False, allow_nan=False)
@@ -38,6 +39,10 @@ def recompute(
         (summary["asOf"], summary["updatedAt"], settings_version, json.dumps(summary, ensure_ascii=False)),
     )
     run_id = int(run.lastrowid)
+    summary["calculation"] = {"runId": run_id, "settingsVersion": settings_version,
+                              "thresholds": dict(settings["thresholds"])}
+    conn.execute("UPDATE score_runs SET summary=? WHERE id=?",
+                 (json.dumps(summary, allow_nan=False), run_id))
     for customer in result["customers"]:
         conn.execute(
             """

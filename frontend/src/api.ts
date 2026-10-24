@@ -16,7 +16,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, asText = false): Promise<T> {
   const token = typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
   const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const response = await fetch(path, {
@@ -35,7 +35,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(response.status, detail);
   }
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  return (asText ? response.text() : response.json()) as Promise<T>;
 }
 
 export interface CustomerQuery {
@@ -60,8 +60,9 @@ export const api = {
     return res;
   },
   logout: async () => {
+    const result = await request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" });
     localStorage.removeItem("auth_token");
-    return request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" });
+    return result;
   },
   customers: (query: CustomerQuery) => {
     const params = new URLSearchParams({
@@ -83,6 +84,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   source: () => request<Snapshot>("/api/v1/source/snapshot"),
+  sourceText: () => request<string>("/api/v1/source/snapshot", {}, true),
+  replaceSourceText: (text: string) =>
+    request<{ counts: Record<string, number>; summary: Summary }>("/api/v1/source/snapshot", { method: "PUT", body: text }),
   replaceSource: (snapshot: Snapshot) =>
     request<{ counts: Record<string, number>; summary: Summary }>("/api/v1/source/snapshot", {
       method: "PUT",

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .schemas import SnapshotIn
-from .scoring import default_settings, iso_z
+from .scoring import default_settings, iso_z, FEATURE_GENERATIONS
 
 
 def _as_iso(value: datetime) -> str:
@@ -142,8 +142,8 @@ def get_settings(conn: sqlite3.Connection) -> tuple[dict[str, Any], int, str]:
         version = 1
         updated = datetime.now(timezone.utc)
         conn.execute(
-            "INSERT INTO settings (id, payload, version, updated_at) VALUES (1, ?, ?, ?)",
-            (json.dumps(payload, ensure_ascii=False), version, _as_iso(updated)),
+            "INSERT INTO settings (id, payload, version, updated_at, feature_schema_version) VALUES (1, ?, ?, ?, ?)",
+            (json.dumps(payload, ensure_ascii=False), version, _as_iso(updated), max(FEATURE_GENERATIONS)),
         )
         return payload, version, _as_iso(updated)
     return json.loads(row["payload"]), int(row["version"]), row["updated_at"]
@@ -156,3 +156,43 @@ def save_settings(conn: sqlite3.Connection, payload: dict[str, Any], version: in
         (json.dumps(payload, ensure_ascii=False), version, updated),
     )
     return updated
+
+
+def validate_saved_money(conn: sqlite3.Connection) -> None:
+    for table, columns in (
+        ('accounts', ('balance', 'withdraw_balance', 'total_replenished', 'bonus_balance')),
+        ('services', ('price',)), ('transactions', ('amount',)),
+    ):
+        for column in columns:
+            bad = conn.execute(
+                f"SELECT id FROM {table} WHERE typeof({column}) != 'integer' OR {column} < 0 LIMIT 1"
+            ).fetchone()
+            if bad is not None:
+                raise ValueError(f'invalid saved money: {table}.{column}, record {bad["id"]}; data preserved')
+
+
+def upgrade_settings(conn: sqlite3.Connection, validate) -> tuple[dict[str, Any], int, str]:
+    """Called only by the startup transaction; never repair unrelated corruption."""
+    payload, version, updated = get_settings(conn)
+    generation = conn.execute("SELECT feature_schema_version FROM settings WHERE id=1").fetchone()[0]
+    target = max(FEATURE_GENERATIONS)
+    if not isinstance(generation, int) or generation < 1 or generation > target:
+        raise ValueError("unsupported feature schema generation")
+    if set(FEATURE_GENERATIONS) != set(range(1, target + 1)):
+        raise ValueError("missing feature schema generation")
+    source_keys = set().union(*(FEATURE_GENERATIONS[g] for g in range(1, generation + 1)))
+    target_keys = set().union(*FEATURE_GENERATIONS.values())
+    keys = set(payload.get("weights", {}))
+    if not source_keys <= keys or not keys <= target_keys:
+        raise ValueError("missing old or unknown feature weights; settings preserved")
+    validate(payload, known=keys)
+    if generation == target:
+        validate(payload)
+        return payload, version, updated
+    for code in target_keys - keys:
+        payload["weights"][code] = 0.0
+    validate(payload)
+    version += 1
+    updated = save_settings(conn, payload, version)
+    conn.execute("UPDATE settings SET feature_schema_version=? WHERE id=1", (target,))
+    return payload, version, updated

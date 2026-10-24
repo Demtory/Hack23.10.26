@@ -245,3 +245,22 @@ def test_nonfinite_integer_setting(client, config, raw):
     assert response.status_code==422
     assert response.json()['detail']
     assert database_state(config.db_path)==before
+
+
+@pytest.mark.parametrize('sort',['id','email','balance','totalReplenished'])
+@pytest.mark.parametrize('order',['asc','desc'])
+def test_old_consumer_002(client,sort,order):
+    response=client.post('/api/v1/auth/login',json={'email':'admin@example.test','password':'admin123'})
+    assert response.json()['token']==response.json()['accessToken']
+    token=response.json()['token'];client.cookies.clear()
+    headers={'Authorization':f'Bearer {token}'}
+    page=client.get('/api/v1/customers',params={'sort':sort,'order':order},headers=headers).json()
+    assert {'items','total','page','pageSize'}<=page.keys()
+    assert {'id','email','balance','totalReplenished','score','level','expectedLoss','servicesAtRisk'}<=page['items'][0].keys()
+    detail=client.get('/api/v1/customers/1',headers=headers).json()
+    assert {'services','money','drivers','explanationRules'}<=detail.keys()
+    before=client.get('/api/v1/model/settings',headers=headers).json()
+    patch=client.patch('/api/v1/model/settings',json={'weights':{'funds_gap':.7},'thresholds':None},headers=headers)
+    assert patch.status_code==200
+    assert patch.json()['settings']['thresholds']==before['thresholds']
+    assert patch.json()['summary']['currency']=='EUR'
