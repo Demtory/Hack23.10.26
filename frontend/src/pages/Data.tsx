@@ -3,7 +3,7 @@ import { api, ApiError } from "../api";
 import type { Snapshot, Summary } from "../types";
 import { dateTime, ErrorBox, money, Spinner } from "../components/ui";
 
-export function Data({ liveTick }: { liveTick: number }) {
+export function Data({ liveTick, onSnapshotUploaded }: { liveTick: number; onSnapshotUploaded?: () => void }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +40,7 @@ export function Data({ liveTick }: { liveTick: number }) {
       const result = await api.replaceSource(parsed);
       setSummary(result.summary);
       setSnapshot(parsed);
+      onSnapshotUploaded?.();
       setStatus(
         `Снимок заменён: ${result.counts.accounts} аккаунтов, ${result.counts.services} услуг, ${result.counts.transactions} транзакций. Модель пересчитана.`,
       );

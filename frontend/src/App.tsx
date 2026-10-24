@@ -122,7 +122,7 @@ export default function App() {
             <Customer id={selectedId} onBack={() => setSelectedId(null)} liveTick={liveTick} />
           ) : null}
           {page === "settings" ? <Settings liveTick={liveTick} /> : null}
-          {page === "data" ? <Data liveTick={liveTick} /> : null}
+          {page === "data" ? <Data liveTick={liveTick} onSnapshotUploaded={() => setLiveTick((v) => v + 1)} /> : null}
         </div>
       </main>
     </div>

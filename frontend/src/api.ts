@@ -17,9 +17,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const response = await fetch(path, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...authHeaders, ...(init.headers ?? {}) },
     ...init,
   });
   if (!response.ok) {
@@ -47,9 +49,20 @@ export interface CustomerQuery {
 
 export const api = {
   me: () => request<User>("/api/v1/auth/me"),
-  login: (email: string, password: string) =>
-    request<User>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  logout: () => request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" }),
+  login: async (email: string, password: string) => {
+    const res = await request<User & { token?: string; accessToken?: string }>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.token || res.accessToken) {
+      localStorage.setItem("auth_token", res.token || res.accessToken || "");
+    }
+    return res;
+  },
+  logout: async () => {
+    localStorage.removeItem("auth_token");
+    return request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" });
+  },
   customers: (query: CustomerQuery) => {
     const params = new URLSearchParams({
       sort: query.sort,
