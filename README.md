@@ -135,6 +135,7 @@ docker compose -f compose.yaml -f compose.sso.yaml up --build
 | Профиль реального датасета | [`docs/DATA_NOTES.md`](docs/DATA_NOTES.md) |
 | Статус реализации | [`docs/STATUS.md`](docs/STATUS.md) |
 | Спецификации по этапам (Spec Kit) | [`specs/`](specs) — 001 модель, 002 данные/UI, 003 панель, 004 тексты и письмо, 005 SSO |
+| **Жюри: запуск за 3 минуты** | [`docs/JURY.md`](docs/JURY.md) |
 
 ---
 
