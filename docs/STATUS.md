@@ -395,3 +395,7 @@ cookie; добавление metadata/default нового признака вы
   `marketer@example.test`. Парольный вход сохранён; консоль Keycloak — `admin`
   с паролем из `/opt/risk-desk/.env`. Оверлей параметризован
   (`OIDC_PUBLIC_BASE`, `APP_PUBLIC_BASE`), деплой с SSO — `SSO=1 ./scripts/deploy_remote.sh`.
+- На экране входа появилась подсказка демо-входа через SSO
+  (`marketer@example.test` / `marketer123`); пароль администратора стенда приведён
+  к `admin123`, чтобы подсказка в интерфейсе была правдой. Скриншот входа обновлён,
+  вход по паролю и SSO повторно проверены на публичном стенде.

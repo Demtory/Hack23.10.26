@@ -136,3 +136,6 @@ dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10
 .forecast__totals > div { padding:18px; border:1px solid #e5eaf0; border-radius:16px; background:#fff; }
 .forecast__totals strong { font-family:'Exo 2',sans-serif; }
 .forecast__hint { max-width:600px; }
+
+.login__hint--sso{margin:8px 0 14px;font-size:.75rem;color:var(--muted)}
+.login__hint--sso code{font-size:.75rem}

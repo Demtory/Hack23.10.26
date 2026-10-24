@@ -71,6 +71,9 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
               <a className="button button--primary button--wide" href="/api/v1/auth/oidc/start">
                 Войти через {sso.providerName}
               </a>
+              <p className="login__hint login__hint--sso">
+                Демо-вход SSO: <code>marketer@example.test</code> / <code>marketer123</code>
+              </p>
               <p className="login__divider"><span>или по паролю</span></p>
             </>
           ) : null}
