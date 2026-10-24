@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
-import type { CustomerDetail, Service } from "../types";
+import type { CustomerDetail, RuleExplanation, Service } from "../types";
 import {
   servicesWord,
   EmptyState,
@@ -148,8 +148,12 @@ export function Customer({
                         </div>
                       </div>
                     ))}
-                    {customer.drivers.length === 0 ? <p className="muted">Явных драйверов нет.</p> : null}
+                    {customer.drivers.length === 0 ? <p className="muted">Явных взвешенных причин нет.</p> : null}
                   </div>
+                  <RuleList rules={customer.explanationRules ?? []} title="Правила клиента" />
+                  {customer.services.map((service) => (
+                    <RuleList key={service.id} rules={service.explanationRules ?? []} title={`Правила услуги ${service.name}`} />
+                  ))}
                 </article>
 
                 <article className="card">
@@ -255,5 +259,21 @@ function ServiceRow({ service }: { service: Service }) {
         <span className={`score-chip score-chip--${service.level}`}>{Math.round(service.score)}</span>
       </td>
     </tr>
+  );
+}
+
+
+function RuleList({ rules, title }: { rules: RuleExplanation[]; title: string }) {
+  if (rules.length === 0) return null;
+  return (
+    <section aria-label={title}>
+      <h3>{title}</h3>
+      {rules.map((rule, index) => (
+        <p key={`${rule.code}-${rule.serviceId}-${index}`}>
+          {rule.label}: {rule.beforeScore.toFixed(1)} → {rule.afterScore.toFixed(1)}
+          {" "}({rule.delta > 0 ? "+" : ""}{rule.delta.toFixed(1)} баллов)
+        </p>
+      ))}
+    </section>
   );
 }

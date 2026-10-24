@@ -108,17 +108,12 @@ def _insert_snapshot(conn: sqlite3.Connection, data: dict[str, list[dict[str, An
 
 def replace_snapshot(conn: sqlite3.Connection, snapshot: SnapshotIn) -> dict[str, int]:
     data = validate_snapshot(snapshot)
-    try:
-        conn.execute("DELETE FROM customer_scores")
-        conn.execute("DELETE FROM score_runs")
-        conn.execute("DELETE FROM transactions")
-        conn.execute("DELETE FROM services")
-        conn.execute("DELETE FROM accounts")
-        _insert_snapshot(conn, data)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+    conn.execute("DELETE FROM customer_scores")
+    conn.execute("DELETE FROM score_runs")
+    conn.execute("DELETE FROM transactions")
+    conn.execute("DELETE FROM services")
+    conn.execute("DELETE FROM accounts")
+    _insert_snapshot(conn, data)
     return {key: len(value) for key, value in data.items()}
 
 
@@ -131,7 +126,8 @@ def ensure_seed(conn: sqlite3.Connection, path: Path, enabled: bool = True) -> b
     if not enabled:
         return False
     count = conn.execute("SELECT count(*) AS n FROM accounts").fetchone()["n"]
-    if count:
+    initialized = conn.execute("SELECT 1 FROM score_runs LIMIT 1").fetchone()
+    if count or initialized:
         return False
     if not path.exists():
         raise FileNotFoundError(f"seed not found: {path}")
@@ -149,7 +145,6 @@ def get_settings(conn: sqlite3.Connection) -> tuple[dict[str, Any], int, str]:
             "INSERT INTO settings (id, payload, version, updated_at) VALUES (1, ?, ?, ?)",
             (json.dumps(payload, ensure_ascii=False), version, _as_iso(updated)),
         )
-        conn.commit()
         return payload, version, _as_iso(updated)
     return json.loads(row["payload"]), int(row["version"]), row["updated_at"]
 
@@ -160,5 +155,4 @@ def save_settings(conn: sqlite3.Connection, payload: dict[str, Any], version: in
         "UPDATE settings SET payload = ?, version = ?, updated_at = ? WHERE id = 1",
         (json.dumps(payload, ensure_ascii=False), version, updated),
     )
-    conn.commit()
     return updated

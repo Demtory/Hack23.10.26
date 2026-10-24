@@ -14,19 +14,6 @@ PROJECT = Path(__file__).resolve().parents[2]
 SEED = PROJECT / "data" / "seed.json"
 
 
-@pytest.fixture()
-def client(tmp_path, monkeypatch):
-    db = tmp_path / "test.db"
-    monkeypatch.setenv("APP_DB", str(db))
-    monkeypatch.setenv("SEED_PATH", str(SEED))
-    monkeypatch.setenv("AS_OF", "2026-10-23T18:00:00.000Z")
-    monkeypatch.setenv("ADMIN_EMAIL", "admin@example.test")
-    monkeypatch.setenv("ADMIN_PASSWORD", "admin123")
-    monkeypatch.setenv("SEED_ON_START", "true")
-    app = create_app(Config.from_env())
-    with TestClient(app) as test_client:
-        yield test_client
-
 
 def login(client: TestClient) -> None:
     response = client.post(
@@ -133,3 +120,128 @@ def test_openapi_and_docs(client: TestClient) -> None:
     assert "/api/v1/customers" in paths
     assert "/api/v1/source/snapshot" in paths
     assert client.get("/api/v1/docs").status_code == 200
+
+
+@pytest.mark.parametrize('raw', ['NaN', 'Infinity', '-Infinity', '1e309', '"NaN"', '"Infinity"', '"bad"'])
+def test_nonfinite_midpoint(client, config, raw):
+    from .conftest import database_state
+    login(client)
+    before = database_state(config.db_path)
+    response = client.patch('/api/v1/model/settings', content='{"probability":{"midpoint":'+raw+'}}', headers={'content-type': 'application/json'})
+    assert response.status_code == 422
+    assert response.json()['detail']
+    assert database_state(config.db_path) == before
+
+
+@pytest.mark.parametrize('payload', [
+    {'weights': {'funds_gap': -1}}, {'weights': dict.fromkeys(['expiry_pressure','funds_gap','autorenew_off','status_pressure','payment_history','commitment'], 0)},
+    {'probability': {'steepness': 0}}, {'thresholds': {'medium': 80}}, {'probability': {'floor': .99}},
+    {'money': {'balanceMitigation': 1.1}}, {'statusFloors': {'stale': -1}}, {'weights': {'funds_gap': None}},
+])
+def test_invalid_merged_settings(client, config, payload):
+    from .conftest import database_state
+    login(client)
+    before = database_state(config.db_path)
+    assert client.patch('/api/v1/model/settings', json=payload).status_code == 422
+    assert database_state(config.db_path) == before
+
+
+def test_patch_null_is_no_change(client):
+    login(client)
+    before = client.get('/api/v1/model/settings').json()
+    payload = {'weights': None, 'probability': {'midpoint': None}, 'money': {'balanceMitigation': None}}
+    assert client.patch('/api/v1/model/settings', json=payload).status_code == 200
+    after = client.get('/api/v1/model/settings').json()
+    for key in ('weights', 'probability', 'money'):
+        assert before[key] == after[key]
+
+
+NUMERIC_PATHS = [
+ ('weights',key) for key in ['expiry_pressure','funds_gap','autorenew_off','status_pressure','payment_history','commitment']
+] + [('thresholds',key) for key in ['medium','high']] + [
+ ('probability',key) for key in ['midpoint','steepness','floor','ceiling']
+] + [('money','balanceMitigation')] + [('statusFloors',key) for key in ['prolong_wait','blocked','stale']]
+
+
+@pytest.mark.parametrize('group,key',NUMERIC_PATHS)
+@pytest.mark.parametrize('raw',['NaN','Infinity','-Infinity','1e309','"bad"'])
+def test_all_numeric_parameters_reject_invalid(client, config, group, key, raw):
+    from .conftest import database_state
+    login(client)
+    before=database_state(config.db_path)
+    body='{"'+group+'":{"'+key+'":'+raw+'}}'
+    response=client.patch('/api/v1/model/settings',content=body,headers={'content-type':'application/json'})
+    assert response.status_code==422
+    assert key in response.text
+    assert database_state(config.db_path)==before
+
+
+@pytest.mark.parametrize('payload',[
+ {'weights':{'funds_gap':0}}, {'thresholds':{'medium':.001,'high':99.999}},
+ {'probability':{'floor':0,'ceiling':1}}, {'money':{'balanceMitigation':0}}, {'money':{'balanceMitigation':1}},
+ {'statusFloors':{'stale':0,'blocked':100}}, {'recomputeIntervalSec':10}, {'recomputeIntervalSec':3600},
+])
+def test_valid_numeric_boundaries(client, payload):
+    login(client)
+    assert client.patch('/api/v1/model/settings',json=payload).status_code==200
+
+
+@pytest.mark.parametrize('payload',[
+ {'thresholds':{'medium':0}}, {'thresholds':{'high':100}}, {'probability':{'floor':-0.01}},
+ {'probability':{'ceiling':1.01}}, {'money':{'balanceMitigation':-.01}}, {'statusFloors':{'stale':100.01}},
+ {'recomputeIntervalSec':9}, {'recomputeIntervalSec':3601}, {'recomputeIntervalSec':'bad'}
+])
+def test_invalid_numeric_boundaries(client, config, payload):
+    from .conftest import database_state
+    login(client);before=database_state(config.db_path)
+    assert client.patch('/api/v1/model/settings',json=payload).status_code==422
+    assert database_state(config.db_path)==before
+
+
+@pytest.mark.parametrize('sort',['id','email','balance','totalReplenished'])
+@pytest.mark.parametrize('order',['asc','desc'])
+def test_all_required_sorts_paginated(client, sort, order):
+    login(client)
+    items=[]
+    for page in range(1,5):
+        response=client.get('/api/v1/customers',params={'sort':sort,'order':order,'pageSize':3,'page':page})
+        assert response.status_code==200
+        items.extend(response.json()['items'])
+    values=[item[sort] for item in items]
+    assert len(items)==10 and len({x['id'] for x in items})==10
+    assert values==sorted(values,reverse=order=='desc')
+
+
+def test_logout_and_consistent_totals(client):
+    login(client)
+    items=client.get('/api/v1/customers').json()['items']
+    summary=client.get('/api/v1/analytics/summary').json()
+    assert sum(summary['countsByLevel'].values())==len(items)
+    for level,count in summary['countsByLevel'].items():assert sum(x['level']==level for x in items)==count
+    for key in ['expectedLoss','amountAtRisk']:
+        assert sum(x[key] for x in items)==pytest.approx(summary[key],abs=.001)
+        details=[client.get(f"/api/v1/customers/{x['id']}").json() for x in items]
+        assert sum(x['money'][key] for x in details)==pytest.approx(summary[key],abs=.001)
+    assert client.post('/api/v1/auth/logout').status_code==200
+    assert client.get('/api/v1/customers').status_code==401
+
+
+def test_openapi_preserves_contract(client):
+    schema=client.get('/api/v1/openapi.json').json()
+    models=schema['components']['schemas']
+    assert set(models['SnapshotIn']['required'])=={'accounts','services','transactions'}
+    for model in ['AccountIn','ServiceIn']:
+        assert set(models[model]['properties'])==set(models[model]['required'])
+    assert 'explanationRules' in models['CustomerDetailOut']['required']
+    assert 'explanationRules' in models['ServiceOut']['required']
+    assert 'anyOf' in models['ProbabilityPatch']['properties']['midpoint']
+
+
+@pytest.mark.parametrize('raw',['NaN','Infinity','-Infinity','1e309'])
+def test_nonfinite_integer_setting(client, config, raw):
+    from .conftest import database_state
+    login(client);before=database_state(config.db_path)
+    response=client.patch('/api/v1/model/settings',content='{"recomputeIntervalSec":'+raw+'}',headers={'content-type':'application/json'})
+    assert response.status_code==422
+    assert response.json()['detail']
+    assert database_state(config.db_path)==before

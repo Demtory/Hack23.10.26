@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
+
+SQLiteInt = Annotated[int, Field(ge=-(2**63), le=2**63 - 1)]
 
 PAYMENT_TERMS = ("hour", "week", "month", "quarter_year", "half_year", "year")
 SERVICE_STATUSES = ("active", "blocked", "deleted", "suspended", "prolong_wait")
@@ -23,25 +25,25 @@ class APIModel(BaseModel):
 
 
 class AccountIn(APIModel):
-    id: int
+    id: SQLiteInt
     email: str = Field(min_length=3, max_length=320)
-    balance: int = Field(default=0, ge=0)
-    withdraw_balance: int = Field(default=0, ge=0)
-    total_replenished: int = Field(default=0, ge=0)
-    bonus_balance: int = Field(default=0, ge=0)
-    bonus_state: Literal["locked", "unlocked"] = "locked"
+    balance: SQLiteInt = Field(ge=0)
+    withdraw_balance: SQLiteInt = Field(ge=0)
+    total_replenished: SQLiteInt = Field(ge=0)
+    bonus_balance: SQLiteInt = Field(ge=0)
+    bonus_state: Literal["locked", "unlocked"]
 
 
 class ServiceIn(APIModel):
-    id: int
+    id: SQLiteInt
     name: str = Field(pattern=r"^[A-Za-z0-9-]+$", max_length=100)
-    owner_id: int
+    owner_id: SQLiteInt
     payment_term: Literal["hour", "week", "month", "quarter_year", "half_year", "year"]
-    auto_prolong: bool = False
+    auto_prolong: bool
     created_at: datetime
     expires_at: datetime
     status: Literal["active", "blocked", "deleted", "suspended", "prolong_wait"]
-    price: int = Field(ge=0)
+    price: SQLiteInt = Field(ge=0)
 
     @field_validator("created_at", "expires_at")
     @classmethod
@@ -58,13 +60,13 @@ class ServiceIn(APIModel):
 
 
 class TransactionIn(APIModel):
-    id: int
-    amount: int = Field(ge=0, le=1000)
+    id: SQLiteInt
+    amount: SQLiteInt = Field(ge=0, le=1000)
     status: Literal["performed", "not_performed"]
     performed_at: datetime | None = None
     created_at: datetime
     type: Literal["prolong", "order"]
-    service_id: int
+    service_id: SQLiteInt
 
     @field_validator("created_at", "performed_at")
     @classmethod
@@ -88,9 +90,10 @@ class TransactionIn(APIModel):
 
 
 class SnapshotIn(APIModel):
-    accounts: list[AccountIn] = Field(default_factory=list)
-    services: list[ServiceIn] = Field(default_factory=list)
-    transactions: list[TransactionIn] = Field(default_factory=list)
+    """Full replacement: all arrays and required fields must be explicit; 0/false are valid."""
+    accounts: list[AccountIn]
+    services: list[ServiceIn]
+    transactions: list[TransactionIn]
 
 
 class LoginIn(BaseModel):
@@ -99,34 +102,153 @@ class LoginIn(BaseModel):
 
 
 class ThresholdsPatch(BaseModel):
-    medium: float | None = Field(default=None, gt=0, lt=100)
-    high: float | None = Field(default=None, gt=0, lt=100)
+    medium: FiniteFloat | None = Field(default=None, gt=0, lt=100)
+    high: FiniteFloat | None = Field(default=None, gt=0, lt=100)
 
     model_config = ConfigDict(extra="forbid")
 
 
 class ProbabilityPatch(BaseModel):
-    midpoint: float | None = None
-    steepness: float | None = Field(default=None, gt=0)
-    floor: float | None = Field(default=None, ge=0, le=1)
-    ceiling: float | None = Field(default=None, ge=0, le=1)
+    midpoint: FiniteFloat | None = Field(default=None, description="Any finite midpoint; values outside 0–100 are supported.")
+    steepness: FiniteFloat | None = Field(default=None, gt=0)
+    floor: FiniteFloat | None = Field(default=None, ge=0, le=1)
+    ceiling: FiniteFloat | None = Field(default=None, ge=0, le=1)
 
     model_config = ConfigDict(extra="forbid")
 
 
 class MoneyPatch(BaseModel):
-    balance_mitigation: float | None = Field(default=None, ge=0, le=1)
+    balance_mitigation: FiniteFloat | None = Field(default=None, ge=0, le=1)
     include_withdraw_balance: bool | None = None
 
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
 
 
 class SettingsPatch(BaseModel):
-    weights: dict[str, float] | None = None
+    """Optional null/omitted fields do not change values. All numeric values must be finite.
+
+    The merged configuration must satisfy medium < high, floor < ceiling and have
+    a positive weight. These cross-field constraints are enforced by the API.
+    """
+    weights: dict[str, FiniteFloat] | None = None
     thresholds: ThresholdsPatch | None = None
     probability: ProbabilityPatch | None = None
     money: MoneyPatch | None = None
-    status_floors: dict[str, float] | None = None
+    status_floors: dict[str, FiniteFloat] | None = None
     recompute_interval_sec: int | None = Field(default=None, ge=10, le=3600)
 
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
+
+
+class RuleExplanation(APIModel):
+    """Score points rounded to one decimal; delta=round(afterScore-beforeScore,1).
+
+    Real effects hidden by rounding remain with delta=0 and an explanatory label.
+    Intermediate bonus scores may exceed100; the final customer score may not.
+    """
+    code: Literal["status_floor", "stale_status_floor", "customer_bonus", "score_cap"]
+    scope: Literal["service", "customer"]
+    service_id: SQLiteInt | None
+    label: str
+    before_score: FiniteFloat
+    after_score: FiniteFloat
+    delta: FiniteFloat
+    related_service_ids: list[SQLiteInt]
+
+
+class DriverOut(APIModel):
+    code: str
+    label: str
+    contribution: FiniteFloat
+    value: FiniteFloat | None = None
+
+
+class ServiceOut(APIModel):
+    id: SQLiteInt
+    name: str
+    price: FiniteFloat
+    payment_term: str
+    status: str
+    auto_prolong: bool
+    created_at: str
+    expires_at: str
+    score: FiniteFloat = Field(ge=0, le=100)
+    level: Literal["high", "medium", "low", "unknown"]
+    confidence: FiniteFloat
+    stale_status: bool
+    drivers: list[DriverOut]
+    values: dict[str, FiniteFloat | None]
+    expiry_days: FiniteFloat
+    explanation_rules: list[RuleExplanation]
+
+
+class MoneyOut(APIModel):
+    amount_at_risk: FiniteFloat
+    expected_loss: FiniteFloat
+    covered_loss: FiniteFloat
+    coverage: FiniteFloat
+    mitigation: FiniteFloat
+
+
+class CustomerDetailOut(APIModel):
+    id: SQLiteInt
+    email: str
+    balance: FiniteFloat
+    withdraw_balance: FiniteFloat
+    bonus_balance: FiniteFloat
+    bonus_state: Literal["locked", "unlocked"]
+    total_replenished: FiniteFloat
+    score: FiniteFloat | None = Field(ge=0, le=100)
+    level: Literal["high", "medium", "low", "unknown"]
+    confidence: FiniteFloat
+    summary: str
+    drivers: list[DriverOut]
+    services: list[ServiceOut]
+    money: MoneyOut
+    unknown_reason: str | None
+    is_estimated: bool
+    explanation_rules: list[RuleExplanation]
+
+
+def _euros(cents: int | float) -> float:
+    return round(float(cents) / 100.0, 2)
+
+
+def detail_response(customer: dict[str, Any]) -> dict[str, Any]:
+    services = []
+    for service in customer["services"]:
+        services.append(
+            {
+                **{k: v for k, v in service.items() if k != "priceCents"},
+                "price": _euros(service["priceCents"]),
+                "explanationRules": service.get("explanationRules", []),
+            }
+        )
+    money = customer["money"]
+    payload = {
+        "id": customer["id"],
+        "email": customer["email"],
+        "balance": _euros(customer["balanceCents"]),
+        "withdrawBalance": _euros(customer["withdrawCents"]),
+        "bonusBalance": _euros(customer["bonusCents"]),
+        "bonusState": customer["bonusState"],
+        "totalReplenished": _euros(customer["totalReplenishedCents"]),
+        "score": customer["score"],
+        "level": customer["level"],
+        "confidence": customer["confidence"],
+        "summary": customer["summaryText"],
+        "drivers": customer["drivers"],
+        "explanationRules": customer.get("explanationRules", []),
+        "services": services,
+        "money": {
+            "amountAtRisk": _euros(money["amountAtRiskCents"]),
+            "expectedLoss": _euros(money["expectedLossCents"]),
+            "coveredLoss": _euros(money["coveredLossCents"]),
+            "coverage": money["coverage"],
+            "mitigation": money["mitigation"],
+        },
+        "unknownReason": customer["unknownReason"],
+        "isEstimated": customer["isEstimated"],
+    }
+
+    return CustomerDetailOut.model_validate(payload).model_dump(by_alias=True, exclude_unset=True)

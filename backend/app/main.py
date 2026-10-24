@@ -5,12 +5,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import _ensure_summary, _metrics_text, router
+from .api import _ensure_summary, _metrics_text, _validate_settings, router
 from .config import ROOT, Config
-from .db import connect, init_db
+from .db import connect, init_db, transaction
 from .security import ensure_admin
 from .seed import ensure_seed, get_settings
 from .store import recompute
@@ -25,10 +26,12 @@ def create_app(config: Config | None = None) -> FastAPI:
         try:
             init_db(conn)
             ensure_admin(conn, cfg.admin_email, cfg.admin_password)
-            get_settings(conn)
-            ensure_seed(conn, cfg.seed_path, cfg.seed_on_start)
-            settings, version, _ = get_settings(conn)
-            recompute(conn, settings, version, cfg.as_of)
+            with transaction(conn):
+                get_settings(conn)
+                ensure_seed(conn, cfg.seed_path, cfg.seed_on_start)
+                settings, version, _ = get_settings(conn)
+                _validate_settings(settings)
+                recompute(conn, settings, version, cfg.as_of)
         finally:
             conn.close()
         yield
@@ -42,6 +45,13 @@ def create_app(config: Config | None = None) -> FastAPI:
         openapi_url="/api/v1/openapi.json",
         lifespan=lifespan,
     )
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError):
+        # Input/ctx can contain NaN, arbitrary objects or sensitive snapshot fields.
+        errors = [{key: error[key] for key in ("loc", "msg", "type") if key in error}
+                  for error in exc.errors()]
+        return JSONResponse(status_code=422, content={"detail": errors})
+
     app.state.config = cfg
     app.include_router(router)
 

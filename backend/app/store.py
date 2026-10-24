@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from .schemas import detail_response
 from .scoring import compute, iso_z, parse_iso
 
 
@@ -25,41 +26,47 @@ def recompute(
     result = compute(accounts, services, transactions, settings, as_of, datetime.now(timezone.utc))
     summary = result["summary"]
 
-    with conn:
-        run = conn.execute(
-            "INSERT INTO score_runs (as_of, created_at, settings_version, summary) VALUES (?, ?, ?, ?)",
-            (summary["asOf"], summary["updatedAt"], settings_version, json.dumps(summary, ensure_ascii=False)),
-        )
-        run_id = int(run.lastrowid)
-        for customer in result["customers"]:
-            conn.execute(
-                """
-                INSERT INTO customer_scores
-                (run_id, account_id, score, level, confidence, drivers, detail,
-                 expected_loss, amount_at_risk, coverage, services_at_risk,
-                 is_estimated, unknown_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    customer["id"],
-                    customer["score"],
-                    customer["level"],
-                    customer["confidence"],
-                    json.dumps(customer["drivers"], ensure_ascii=False),
-                    json.dumps(customer, ensure_ascii=False),
-                    customer["money"]["expectedLossCents"],
-                    customer["money"]["amountAtRiskCents"],
-                    customer["money"]["coverage"],
-                    sum(1 for s in customer["services"] if s["score"] >= settings["thresholds"]["medium"]),
-                    1 if customer["isEstimated"] else 0,
-                    customer["unknownReason"],
-                ),
-            )
-        # Keep the table small on a hackathon demo DB.
+    # Fail before any publication on non-finite JSON or an unrepresentable SQL value.
+    json.dumps(result, ensure_ascii=False, allow_nan=False)
+    for customer in result["customers"]:
+        detail_response(customer)
+        for key in ("expectedLossCents", "amountAtRiskCents"):
+            if not 0 <= customer["money"][key] <= 2**63 - 1:
+                raise ValueError(f"result {key} is outside SQLite INTEGER range")
+    run = conn.execute(
+        "INSERT INTO score_runs (as_of, created_at, settings_version, summary) VALUES (?, ?, ?, ?)",
+        (summary["asOf"], summary["updatedAt"], settings_version, json.dumps(summary, ensure_ascii=False)),
+    )
+    run_id = int(run.lastrowid)
+    for customer in result["customers"]:
         conn.execute(
-            "DELETE FROM score_runs WHERE id NOT IN (SELECT id FROM score_runs ORDER BY id DESC LIMIT 20)"
+            """
+            INSERT INTO customer_scores
+            (run_id, account_id, score, level, confidence, drivers, detail,
+             expected_loss, amount_at_risk, coverage, services_at_risk,
+             is_estimated, unknown_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                customer["id"],
+                customer["score"],
+                customer["level"],
+                customer["confidence"],
+                json.dumps(customer["drivers"], ensure_ascii=False),
+                json.dumps(customer, ensure_ascii=False),
+                customer["money"]["expectedLossCents"],
+                customer["money"]["amountAtRiskCents"],
+                customer["money"]["coverage"],
+                sum(1 for s in customer["services"] if s["score"] >= settings["thresholds"]["medium"]),
+                1 if customer["isEstimated"] else 0,
+                customer["unknownReason"],
+            ),
         )
+    # Keep the table small on a hackathon demo DB.
+    conn.execute(
+        "DELETE FROM score_runs WHERE id NOT IN (SELECT id FROM score_runs ORDER BY id DESC LIMIT 20)"
+    )
     return summary
 
 

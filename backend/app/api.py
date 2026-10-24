@@ -3,17 +3,18 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import math
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.security import APIKeyCookie
 
 from .config import Config
-from .db import connect
-from .schemas import LoginIn, SettingsPatch, SnapshotIn
+from .db import connect, transaction
+from .schemas import CustomerDetailOut, LoginIn, SettingsPatch, SnapshotIn, detail_response
 from .scoring import FEATURES_META
 from .security import (
     SESSION_COOKIE,
@@ -22,7 +23,7 @@ from .security import (
     delete_session,
     get_session_user,
 )
-from .seed import get_settings, replace_snapshot, save_settings
+from .seed import get_settings, replace_snapshot, save_settings, validate_snapshot
 from .store import (
     customer_detail,
     latest_customers,
@@ -71,8 +72,13 @@ def _ensure_summary(conn: sqlite3.Connection, config: Config) -> dict[str, Any]:
     summary = latest_summary(conn)
     if summary is not None:
         return summary
-    settings, version, _ = get_settings(conn)
-    return recompute(conn, settings, version, config.as_of)
+    with transaction(conn):
+        summary = latest_summary(conn)
+        if summary is None:
+            settings, version, _ = get_settings(conn)
+            _validate_settings(settings)
+            summary = recompute(conn, settings, version, config.as_of)
+        return summary
 
 
 def _summary_api(summary: dict[str, Any]) -> dict[str, Any]:
@@ -103,39 +109,7 @@ def _settings_api(payload: dict[str, Any], version: int, updated_at: str) -> dic
 
 
 def _detail_api(customer: dict[str, Any]) -> dict[str, Any]:
-    services = []
-    for service in customer["services"]:
-        services.append(
-            {
-                **{k: v for k, v in service.items() if k != "priceCents"},
-                "price": euros(service["priceCents"]),
-            }
-        )
-    money = customer["money"]
-    return {
-        "id": customer["id"],
-        "email": customer["email"],
-        "balance": euros(customer["balanceCents"]),
-        "withdrawBalance": euros(customer["withdrawCents"]),
-        "bonusBalance": euros(customer["bonusCents"]),
-        "bonusState": customer["bonusState"],
-        "totalReplenished": euros(customer["totalReplenishedCents"]),
-        "score": customer["score"],
-        "level": customer["level"],
-        "confidence": customer["confidence"],
-        "summary": customer["summaryText"],
-        "drivers": customer["drivers"],
-        "services": services,
-        "money": {
-            "amountAtRisk": euros(money["amountAtRiskCents"]),
-            "expectedLoss": euros(money["expectedLossCents"]),
-            "coveredLoss": euros(money["coveredLossCents"]),
-            "coverage": money["coverage"],
-            "mitigation": money["mitigation"],
-        },
-        "unknownReason": customer["unknownReason"],
-        "isEstimated": customer["isEstimated"],
-    }
+    return detail_response(customer)
 
 
 # --------------------------------------------------------------------------- auth
@@ -268,7 +242,7 @@ def customers(
     return {"items": items, "total": int(total), "page": page, "pageSize": pageSize}
 
 
-@router.get("/customers/{account_id}")
+@router.get("/customers/{account_id}", response_model=CustomerDetailOut, response_model_exclude_unset=True)
 def customer(
     account_id: int,
     config: Config = Depends(get_config),
@@ -303,9 +277,12 @@ def _validate_settings(payload: dict[str, Any]) -> None:
     unknown = set(weights) - known
     if unknown:
         raise ValueError(f"unknown feature weights: {sorted(unknown)}")
-    if any(float(value) < 0 for value in weights.values()):
+    SettingsPatch.model_validate(payload)
+    if set(weights) != known:
+        raise ValueError("weights must contain all existing feature keys")
+    if any(not math.isfinite(float(value)) or float(value) < 0 for value in weights.values()):
         raise ValueError("weights must be >= 0")
-    if sum(float(value) for value in weights.values()) <= 0:
+    if not any(float(value) > 0 for value in weights.values()):
         raise ValueError("weights sum must be > 0")
     medium = float(payload["thresholds"]["medium"])
     high = float(payload["thresholds"]["high"])
@@ -340,28 +317,35 @@ def patch_settings(
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
-    current, version, _ = get_settings(conn)
-    merged = copy.deepcopy(current)
-    delta = patch.model_dump(by_alias=True, exclude_none=True)
-    for key in ("weights", "statusFloors"):
-        if key in delta and delta[key] is not None:
-            merged.setdefault(key, {}).update(delta[key])
-    for key in ("thresholds", "probability", "money"):
-        if key in delta and delta[key] is not None:
-            merged.setdefault(key, {}).update(delta[key])
-    if "recomputeIntervalSec" in delta:
-        merged["recomputeIntervalSec"] = delta["recomputeIntervalSec"]
     try:
-        _validate_settings(merged)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    new_version = version + 1
-    updated_at = save_settings(conn, merged, new_version)
-    summary = recompute(conn, merged, new_version, config.as_of)
-    return {
-        "settings": _settings_api(merged, new_version, updated_at),
-        "summary": _summary_api(summary),
-    }
+        with transaction(conn):
+            current, version, _ = get_settings(conn)
+            merged = copy.deepcopy(current)
+            delta = patch.model_dump(by_alias=True, exclude_none=True)
+            for key in ("weights", "statusFloors"):
+                if key in delta and delta[key] is not None:
+                    merged.setdefault(key, {}).update(delta[key])
+            for key in ("thresholds", "probability", "money"):
+                if key in delta and delta[key] is not None:
+                    merged.setdefault(key, {}).update(delta[key])
+            if "recomputeIntervalSec" in delta:
+                merged["recomputeIntervalSec"] = delta["recomputeIntervalSec"]
+            try:
+                _validate_settings(merged)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            new_version = version + 1
+            updated_at = save_settings(conn, merged, new_version)
+            summary = recompute(conn, merged, new_version, config.as_of)
+            response = JSONResponse({
+                "settings": _settings_api(merged, new_version, updated_at),
+                "summary": _summary_api(summary),
+            })
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Изменение не применено; сохранено прежнее состояние") from None
 
 
 # -------------------------------------------------------------------------- source
@@ -435,12 +419,21 @@ def put_snapshot(
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     try:
-        counts = replace_snapshot(conn, body)
+        validate_snapshot(body)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    settings, version, _ = get_settings(conn)
-    summary = recompute(conn, settings, version, config.as_of)
-    return {"counts": counts, "summary": _summary_api(summary)}
+    try:
+        with transaction(conn):
+            settings, version, _ = get_settings(conn)
+            _validate_settings(settings)
+            counts = replace_snapshot(conn, body)
+            summary = recompute(conn, settings, version, config.as_of)
+            response = JSONResponse({"counts": counts, "summary": _summary_api(summary)})
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Изменение не применено; сохранено прежнее состояние") from None
 
 
 # ------------------------------------------------------------------------- metrics

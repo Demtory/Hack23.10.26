@@ -108,9 +108,26 @@ def level_for(score: float | None, thresholds: dict[str, float]) -> str:
 
 def probability(score: float, settings: dict[str, Any]) -> float:
     prob = settings["probability"]
-    raw = 1.0 / (1.0 + math.exp(-(score - prob["midpoint"]) / prob["steepness"]))
+    z = (score - prob["midpoint"]) / prob["steepness"]
+    if z >= 0:
+        raw = 1.0 / (1.0 + math.exp(-z))
+    else:
+        exp_z = math.exp(z)
+        raw = exp_z / (1.0 + exp_z)
     return max(prob["floor"], min(prob["ceiling"], raw))
 
+
+
+def explanation_rule(code: str, scope: str, service_id: int | None, label: str,
+                     before: float, after: float, related: list[int] | None = None) -> dict[str, Any]:
+    # These are display projections; the scoring arithmetic remains untouched.
+    before_display, after_display = round(before, 1), round(after, 1)
+    delta = round(after_display - before_display, 1) or 0.0
+    if delta == 0.0:
+        label += "; после округления оценка не изменилась"
+    return {"code": code, "scope": scope, "serviceId": service_id, "label": label,
+            "beforeScore": before_display, "afterScore": after_display, "delta": delta,
+            "relatedServiceIds": related or []}
 
 def available_cents(account: dict[str, Any], settings: dict[str, Any]) -> int:
     value = int(account["balance"]) + (
@@ -217,6 +234,10 @@ def _score_service(
     }
 
     total_weight = sum(float(weight) for weight in weights.values())
+    if not math.isfinite(total_weight):
+        scale = max(weights.values())
+        weights = {code: weight / scale for code, weight in weights.items()}
+        total_weight = sum(weights.values())
     score = 0.0
     confidence = 0.0
     drivers: list[dict[str, Any]] = []
@@ -240,15 +261,22 @@ def _score_service(
 
     score *= 100.0
     floors = settings["statusFloors"]
-    if service["status"] == "prolong_wait":
-        score = max(score, floors["prolong_wait"])
-    elif service["status"] == "blocked":
-        score = max(score, floors["blocked"])
-    if stale:
-        score = max(score, floors["stale"])
+    rules: list[dict[str, Any]] = []
+    if service["status"] in ("prolong_wait", "blocked"):
+        floor = floors[service["status"]]
+        if score < floor:
+            rules.append(explanation_rule("status_floor", "service", service["id"],
+                f"Статус {service['status']}: применён минимум {floor:g}", score, floor))
+            score = floor
+    if stale and score < floors["stale"]:
+        floor = floors["stale"]
+        rules.append(explanation_rule("stale_status_floor", "service", service["id"],
+            f"Устаревший статус: применён минимум {floor:g}", score, floor))
+        score = floor
     drivers.sort(key=lambda item: item["contribution"], reverse=True)
 
     return {
+        "explanationRules": rules,
         "score": round(score, 1),
         "confidence": round(confidence, 2),
         "stale": stale,
@@ -273,6 +301,7 @@ def _service_detail(service: dict[str, Any], result: dict[str, Any], settings: d
         "confidence": result["confidence"],
         "staleStatus": result["stale"],
         "drivers": result["drivers"],
+        "explanationRules": result["explanationRules"],
         "values": result["values"],
         "expiryDays": result["expiryDays"],
     }
@@ -351,6 +380,7 @@ def compute(
                         "coverage": 0.0,
                         "mitigation": 0.0,
                     },
+                    "explanationRules": [],
                     "unknownReason": reason,
                     "isEstimated": False,
                 }
@@ -360,11 +390,20 @@ def compute(
         at_risk_services = sum(
             1 for _, result in scored if result["score"] >= settings["thresholds"]["medium"]
         )
-        customer_score = min(
-            100.0,
-            max(result["score"] for _, result in scored)
-            + 4.0 * max(0, at_risk_services - 1),
-        )
+        base_score = max(result["score"] for _, result in scored)
+        bonus = 4.0 * max(0, at_risk_services - 1)
+        uncapped = base_score + bonus
+        customer_rules: list[dict[str, Any]] = []
+        if bonus:
+            related = [service["id"] for service, result in scored
+                       if result["score"] >= settings["thresholds"]["medium"]]
+            customer_rules.append(explanation_rule("customer_bonus", "customer", None,
+                f"Услуг под риском: {at_risk_services}; добавка {bonus:g} баллов до ограничения100",
+                base_score, uncapped, related))
+        customer_score = min(100.0, uncapped)
+        if uncapped > 100:
+            customer_rules.append(explanation_rule("score_cap", "customer", None,
+                "Ограничение итогового score: 100", uncapped, customer_score))
         customer_level = level_for(customer_score, settings["thresholds"])
         counts[customer_level] += 1
         scored_scores.append(customer_score)
@@ -400,7 +439,12 @@ def compute(
             driver["label"][0].lower() + driver["label"][1:]
             for driver in top_result["drivers"][:2]
         ]
-        summary_text = f"{top_service['name']}: {', '.join(labels)}" if labels else "Риск ниже порога"
+        summary_text = f"{top_service['name']}: {', '.join(labels)}" if labels else {
+            "low": "Риск ниже порога", "medium": "Средний риск", "high": "Высокий риск"
+        }[customer_level]
+        rule_labels = [rule["label"] for rule in top_result["explanationRules"] + customer_rules]
+        if rule_labels:
+            summary_text += "; " + "; ".join(rule_labels)
         remaining = len(scored) - 1
         if remaining > 0:
             if remaining % 10 == 1 and remaining % 100 != 11:
@@ -432,6 +476,7 @@ def compute(
                 "level": customer_level,
                 "confidence": confidence,
                 "summaryText": summary_text,
+                "explanationRules": customer_rules,
                 "drivers": drivers,
                 "services": services_out,
                 "money": {

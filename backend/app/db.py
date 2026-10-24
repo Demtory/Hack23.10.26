@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 SCHEMA = """
@@ -100,3 +101,15 @@ def connect(path: Path) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection):
+    """One owner for source/settings, results and commit, including commit errors."""
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        yield
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise

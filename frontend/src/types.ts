@@ -12,6 +12,17 @@ export interface CustomerListItem {
   servicesAtRisk: number;
 }
 
+export interface RuleExplanation {
+  code: "status_floor" | "stale_status_floor" | "customer_bonus" | "score_cap";
+  scope: "service" | "customer";
+  serviceId: number | null;
+  label: string;
+  beforeScore: number;
+  afterScore: number;
+  delta: number;
+  relatedServiceIds: number[];
+}
+
 export interface Driver {
   code: string;
   label: string;
@@ -33,6 +44,7 @@ export interface Service {
   confidence: number;
   staleStatus: boolean;
   drivers: Driver[];
+  explanationRules?: RuleExplanation[];
   values: Record<string, number | null>;
   expiryDays: number;
 }
@@ -58,6 +70,7 @@ export interface CustomerDetail {
   confidence: number;
   summary: string;
   drivers: Driver[];
+  explanationRules?: RuleExplanation[];
   services: Service[];
   money: Money;
   unknownReason: string | null;

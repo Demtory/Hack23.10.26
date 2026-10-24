@@ -173,8 +173,20 @@ npm run dev   # http://localhost:5173, proxy на :8000
 Тесты:
 
 ```bash
-PYTHONPATH=backend .venv/bin/pytest -q backend/tests
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements-dev.txt
+PYTHONPATH=backend .venv/bin/python -m pytest -q backend/tests data/raw/test_generate.py
+npm --prefix frontend ci
+npm --prefix frontend run build
 ```
+
+Тесты используют отдельные временные SQLite, не рабочую `data/app.db`.
+Для замены снимка все три массива и обязательные поля должны быть переданы явно:
+отсутствие/null вызывает422 без частичного импорта; явные0/false допустимы.
+Явные три пустых массива означают намеренную очистку и сохраняются после restart.
+Настройки и снимок фиксируются вместе с успешным пересчётом; при внутреннем отказе
+сохраняется прежнее состояние. `drivers` остаётся массивом взвешенных причин,
+дополнительные правила доступны в `explanationRules` клиента/услуг и в карточке.
 
 Пересобрать OpenAPI:
 
