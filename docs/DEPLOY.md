@@ -29,7 +29,8 @@ Docker и GitHub.
 Из локального репозитория:
 
 ```bash
-./scripts/deploy_remote.sh          # rsync + пересборка + статус
+./scripts/deploy_remote.sh          # rsync + пересборка + статус (без Keycloak)
+SSO=1 ./scripts/deploy_remote.sh    # то же + Keycloak и снятие HTTPS с консоли
 ```
 
 Скрипт копирует рабочее дерево (без `.git`, `.venv`, `node_modules`, базы и `.env`),
@@ -52,8 +53,13 @@ docker compose restart app
 Сбросить данные к seed (осторожно, удалит изменения):
 
 ```bash
-docker compose down -v && docker compose up -d --build
+cd /opt/risk-desk
+docker compose -f compose.yaml -f compose.sso.yaml down -v
+docker compose -f compose.yaml -f compose.sso.yaml up -d --build
 ```
+
+После сброса пароль панели снова `admin123` (из `.env`), а realm Keycloak
+переимпортируется из `deploy/keycloak/risk-desk-realm.json`.
 
 ## Ограничения и безопасность
 
@@ -64,8 +70,8 @@ docker compose down -v && docker compose up -d --build
   Стенд публичный: не храните на нём реальные данные и не считайте его защищённым.
 - **Пароль root был передан в чате** — после защиты смените его (`passwd`) или
   переустановите сервер.
-- Keycloak на стенд не устанавливался: SSO показывается локально, чтобы не держать
-  второй контейнер и лишний порт.
+- Keycloak на стенде **установлен** (порт 8081, ~500 МБ): SSO доступен и снаружи,
+  и локально. Требование HTTPS у master-realm снимает скрипт деплоя.
 - Срок сервера — примерно до **26 октября 2026**. После окончания оплаты ссылка
   перестанет открываться; локальный запуск из README продолжит работать.
 
