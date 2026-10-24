@@ -10,6 +10,7 @@ export interface CustomerListItem {
   expectedLoss: number;
   amountAtRisk: number;
   servicesAtRisk: number;
+  summary: string;
 }
 
 export interface RuleExplanation {

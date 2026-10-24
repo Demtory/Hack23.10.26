@@ -23,7 +23,7 @@
 | README + модель + архитектура + «как добавить признак» | ✅ | `README.md`, `docs/` |
 | Расширяемость признаков | ✅ | `FEATURES_META`, `backend/app/scoring.py` |
 | Комментарий `Aéza` | ✅ | `backend/app/main.py`, `Dockerfile` |
-| Тесты | ✅ | `backend/tests` + генератор, 249 passed (см. ниже) |
+| Тесты | ✅ | `backend/tests` + генератор, 250 passed (см. ниже) |
 
 ## Ещё не сделано (P1/P2)
 
@@ -142,4 +142,6 @@ PYTHONPATH=backend python scripts/export_openapi.py
   таблицы, `aria-sort`, focus-состояния.
 - Карточка клиента получила «Следующее действие»; технические правила
   убраны в свёрнутый блок «Детали расчёта».
-- Проверка: `249 passed`, `npm run build`, Docker healthy.
+- Причина оценки видна уже в рейтинге под email (обрезается до двух строк,
+  полный текст — в tooltip) и в мобильных карточках.
+- Проверка: `250 passed`, `npm run build`, Docker healthy.

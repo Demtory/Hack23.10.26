@@ -36,3 +36,12 @@ def test_feature_help_metadata(client):
     for feature in features:
         assert feature['zero']
         assert feature['one']
+
+
+def test_list_contains_reason(client):
+    login(client)
+    items = client.get('/api/v1/customers?pageSize=100').json()['items']
+    assert len(items) == 10
+    assert all(item['summary'] for item in items)
+    assert next(item for item in items if item['id'] == 6)['summary'].startswith('service-0006:')
+    assert next(item for item in items if item['id'] == 3)['summary'] == 'Все услуги удалены'

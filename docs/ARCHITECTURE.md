@@ -215,7 +215,8 @@ GET /api/v1/customers?sort=balance&order=desc&level=high&q=ivan&page=1&pageSize=
       "level": "high",
       "expectedLoss": 5.51,
       "amountAtRisk": 9.90,
-      "servicesAtRisk": 1
+      "servicesAtRisk": 1,
+      "summary": "service-0006: продление через 2 дн., баланса €3.00 не хватает на €5.50"
     }
   ],
   "total": 137,

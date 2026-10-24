@@ -274,7 +274,9 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
                     <td>
                       <div className="client-cell">
                         <span className="client-cell__email">{item.email}</span>
-                        <span className="client-cell__meta">{servicesWord(item.servicesAtRisk)} под риском</span>
+                        <span className="client-cell__meta" title={item.summary}>
+                          {item.summary}
+                        </span>
                       </div>
                     </td>
                     <td className="num">{money(item.balance)}</td>
@@ -308,6 +310,7 @@ export function Dashboard({ onSelect, liveTick }: { onSelect: (id: number) => vo
                 <span className="mobile-client__email">{item.email}</span>
                 <LevelBadge level={item.level} />
               </div>
+              <p className="mobile-client__reason">{item.summary}</p>
               <div className="mobile-client__meta">
                 <span>Score {item.score === null ? "—" : Math.round(item.score)}</span>
                 <span>{servicesWord(item.servicesAtRisk)} под риском</span>

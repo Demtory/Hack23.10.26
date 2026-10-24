@@ -217,7 +217,8 @@ def customers(
     rows = conn.execute(
         f"""
         SELECT cs.account_id AS id, a.email, a.balance, a.total_replenished,
-               cs.score, cs.level, cs.expected_loss, cs.amount_at_risk, cs.services_at_risk
+               cs.score, cs.level, cs.expected_loss, cs.amount_at_risk,
+               cs.services_at_risk, cs.detail
         FROM customer_scores cs JOIN accounts a ON a.id = cs.account_id
         WHERE {where_sql}
         ORDER BY {order_sql}, a.id ASC
@@ -226,20 +227,23 @@ def customers(
         [*params, pageSize, offset],
     ).fetchall()
 
-    items = [
-        {
-            "id": int(row["id"]),
-            "email": row["email"],
-            "balance": euros(row["balance"]),
-            "totalReplenished": euros(row["total_replenished"]),
-            "score": row["score"],
-            "level": row["level"],
-            "expectedLoss": euros(row["expected_loss"]),
-            "amountAtRisk": euros(row["amount_at_risk"]),
-            "servicesAtRisk": int(row["services_at_risk"]),
-        }
-        for row in rows
-    ]
+    items = []
+    for row in rows:
+        detail = json.loads(row["detail"])
+        items.append(
+            {
+                "id": int(row["id"]),
+                "email": row["email"],
+                "balance": euros(row["balance"]),
+                "totalReplenished": euros(row["total_replenished"]),
+                "score": row["score"],
+                "level": row["level"],
+                "expectedLoss": euros(row["expected_loss"]),
+                "amountAtRisk": euros(row["amount_at_risk"]),
+                "servicesAtRisk": int(row["services_at_risk"]),
+                "summary": detail.get("summaryText") or detail.get("unknownReason") or "",
+            }
+        )
     return {"items": items, "total": int(total), "page": page, "pageSize": pageSize}
 
 
