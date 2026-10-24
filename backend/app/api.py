@@ -54,6 +54,9 @@ def require_user(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
     token = cookie_token or request.cookies.get(SESSION_COOKIE)
+    auth_header = request.headers.get("Authorization")
+    if not token and auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="authentication required")
     user = get_session_user(conn, token)
@@ -135,7 +138,7 @@ def login(
         secure=config.cookie_secure,
         path="/",
     )
-    return {"id": user_id, "email": body.email}
+    return {"id": user_id, "email": body.email, "token": token, "accessToken": token}
 
 
 @router.get("/auth/me")
@@ -242,15 +245,15 @@ def customers(
     return {"items": items, "total": int(total), "page": page, "pageSize": pageSize}
 
 
-@router.get("/customers/{account_id}", response_model=CustomerDetailOut, response_model_exclude_unset=True)
+@router.get("/customers/{id}", response_model=CustomerDetailOut, response_model_exclude_unset=True)
 def customer(
-    account_id: int,
+    id: int,
     config: Config = Depends(get_config),
     conn: sqlite3.Connection = Depends(get_db),
     _user: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     _ensure_summary(conn, config)
-    detail = customer_detail(conn, account_id)
+    detail = customer_detail(conn, id)
     if detail is None:
         raise HTTPException(status_code=404, detail="customer not found")
     return _detail_api(detail)
