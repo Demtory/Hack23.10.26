@@ -12,6 +12,14 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS oidc_flows (
+    state TEXT PRIMARY KEY,
+    nonce TEXT NOT NULL,
+    code_verifier TEXT NOT NULL,
+    redirect_to TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -104,6 +112,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)")}
     if "feature_schema_version" not in columns:
         conn.execute("ALTER TABLE settings ADD COLUMN feature_schema_version INTEGER NOT NULL DEFAULT 1")
+    user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "oidc_subject" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN oidc_subject TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS users_oidc_subject_idx ON users(oidc_subject) "
+        "WHERE oidc_subject IS NOT NULL"
+    )
     conn.commit()
 
 

@@ -4,6 +4,7 @@ import asyncio
 import copy
 import csv
 import io
+import secrets
 import unicodedata
 import json
 import math
@@ -12,9 +13,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.security import APIKeyCookie, HTTPBearer, HTTPAuthorizationCredentials
 
+from . import oidc
 from .config import Config
 from .db import connect, transaction, read_snapshot as read_transaction
 from .schemas import CustomerDetailOut, CustomerViewOut, CustomerPageOut, SummaryOut, SummaryBase, LoginIn, SettingsPatch, SnapshotIn, detail_response
@@ -24,7 +26,10 @@ from .security import (
     authenticate,
     create_session,
     delete_session,
+    ensure_oidc_user,
     get_session_user,
+    iso_z,
+    utcnow,
 )
 from .seed import get_settings, replace_snapshot, save_settings, validate_snapshot
 from .store import (
@@ -168,6 +173,124 @@ def logout(
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 
+
+
+# ------------------------------------------------------------------------ oidc
+
+
+OIDC_CALLBACK_PATH = "/api/v1/auth/oidc/callback"
+OIDC_FLOW_TTL = timedelta(minutes=10)
+
+
+def _oidc_redirect_uri(request: Request, config: Config) -> str:
+    if config.oidc_redirect_uri:
+        return config.oidc_redirect_uri
+    return str(request.base_url).rstrip("/") + OIDC_CALLBACK_PATH
+
+
+def _login_redirect(code: str) -> RedirectResponse:
+    return RedirectResponse(f"/#/login?sso_error={code}", status_code=303,
+                            headers={"Cache-Control": "no-store"})
+
+
+def _set_session_cookie(response: Response, token: str, config: Config) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=config.session_hours * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=config.cookie_secure,
+        path="/",
+    )
+
+
+@router.get("/auth/oidc/config", openapi_extra={"security": []})
+def oidc_config(config: Config = Depends(get_config)) -> dict[str, Any]:
+    return {"enabled": config.oidc_enabled, "providerName": config.oidc_provider_name}
+
+
+@router.get("/auth/oidc/start", openapi_extra={"security": []})
+def oidc_start(
+    request: Request,
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> RedirectResponse:
+    if not config.oidc_enabled:
+        raise HTTPException(status_code=404, detail="oidc is not configured")
+    try:
+        discovery = oidc.discover(config.oidc_issuer, config.oidc_internal_base)
+    except oidc.OIDCError:
+        return _login_redirect("provider_unavailable")
+
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    verifier, challenge = oidc.make_pkce_pair()
+    conn.execute("DELETE FROM oidc_flows WHERE created_at < ?", (iso_z(utcnow() - timedelta(hours=1)),))
+    conn.execute(
+        "INSERT INTO oidc_flows (state, nonce, code_verifier, redirect_to, created_at) VALUES (?, ?, ?, ?, ?)",
+        (state, nonce, verifier, "/#/", iso_z(utcnow())),
+    )
+    conn.commit()
+    url = oidc.authorize_url(
+        discovery, config.oidc_client_id, _oidc_redirect_uri(request, config),
+        config.oidc_scopes, state, nonce, challenge,
+    )
+    return RedirectResponse(url, status_code=303, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/auth/oidc/callback", openapi_extra={"security": []})
+def oidc_callback(
+    request: Request,
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    config: Config = Depends(get_config),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> RedirectResponse:
+    if error:
+        return _login_redirect("access_denied")
+    if not code or not state:
+        return _login_redirect("state_invalid")
+
+    flow = conn.execute("SELECT * FROM oidc_flows WHERE state = ?", (state,)).fetchone()
+    if flow is not None:
+        conn.execute("DELETE FROM oidc_flows WHERE state = ?", (state,))
+        conn.commit()
+    if flow is None:
+        return _login_redirect("state_invalid")
+    created = datetime.fromisoformat(flow["created_at"].replace("Z", "+00:00"))
+    if utcnow() - created > OIDC_FLOW_TTL:
+        return _login_redirect("state_invalid")
+
+    try:
+        discovery = oidc.discover(config.oidc_issuer, config.oidc_internal_base)
+        tokens = oidc.exchange_code(
+            discovery, config.oidc_issuer, config.oidc_internal_base,
+            config.oidc_client_id, config.oidc_client_secret,
+            code, _oidc_redirect_uri(request, config), flow["code_verifier"],
+        )
+    except oidc.OIDCError as exc:
+        return _login_redirect(exc.code)
+
+    try:
+        claims = oidc.validate_id_token(
+            tokens["id_token"], discovery, config.oidc_issuer, config.oidc_client_id,
+            flow["nonce"], config.oidc_internal_base,
+        )
+    except oidc.OIDCError as exc:
+        return _login_redirect(exc.code)
+
+    email = (claims.get("email") or "").strip()
+    if not email or claims.get("email_verified") is False:
+        return _login_redirect("email_unverified")
+
+    user_id = ensure_oidc_user(conn, email, claims["sub"])
+    token = create_session(conn, user_id, config.session_hours)
+    response = RedirectResponse(flow["redirect_to"] or "/#/", status_code=303,
+                                headers={"Cache-Control": "no-store"})
+    _set_session_cookie(response, token, config)
+    return response
 
 # ----------------------------------------------------------------------- customers
 

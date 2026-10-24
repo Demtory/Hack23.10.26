@@ -97,3 +97,30 @@ def delete_session(conn: sqlite3.Connection, token: str) -> None:
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
     conn.commit()
+
+
+def ensure_oidc_user(conn: sqlite3.Connection, email: str, subject: str) -> int:
+    """Автосоздание пользователя по email из подтверждённого ID token.
+
+    У SSO-пользователя нет пароля: пустая строка в password_hash не проходит
+    verify_password, поэтому вход по паролю для него закрыт.
+    """
+    normalized = email.strip().lower()
+    if not normalized:
+        raise ValueError("email is required")
+    row = conn.execute(
+        "SELECT id, oidc_subject FROM users WHERE email = ?", (normalized,)
+    ).fetchone()
+    if row is not None:
+        if row["oidc_subject"] != subject:
+            conn.execute(
+                "UPDATE users SET oidc_subject = ? WHERE id = ?", (subject, row["id"])
+            )
+            conn.commit()
+        return int(row["id"])
+    cursor = conn.execute(
+        "INSERT INTO users (email, password_hash, oidc_subject, created_at) VALUES (?, '', ?, ?)",
+        (normalized, subject, iso_z(utcnow())),
+    )
+    conn.commit()
+    return int(cursor.lastrowid)

@@ -43,6 +43,35 @@ docker compose down -v
 
 ---
 
+## Вход: пароль и SSO
+
+По умолчанию вход по паролю (`admin@example.test` / `admin123`). OIDC включается
+переменными окружения и не ломает парольный вход — он остаётся как fallback.
+
+Демо с Keycloak:
+
+```bash
+docker compose --profile sso up --build   # Keycloak на http://localhost:8081
+```
+
+На экране входа появится «Войти через Keycloak»; тестовый пользователь —
+`marketer@example.test` / `marketer123` (realm `risk-desk`, клиент `risk-desk`).
+
+| Переменная | Назначение |
+|---|---|
+| `OIDC_ISSUER` | публичный issuer, он же ожидаемый `iss` в ID token |
+| `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | клиент; secret можно не задавать для public-клиента с PKCE |
+| `OIDC_REDIRECT_URI` | адрес callback, по умолчанию выводится из запроса |
+| `OIDC_SCOPES` | по умолчанию `openid email profile` |
+| `OIDC_INTERNAL_BASE` | внутренний адрес issuer для server-to-server вызовов (например `http://keycloak:8080/realms/risk-desk`) |
+| `OIDC_PROVIDER_NAME` | подпись кнопки, по умолчанию `SSO` |
+
+Реализован Authorization Code + PKCE (S256): state и nonce хранятся в БД и одноразовые,
+подпись ID token проверяется по JWKS (RS256), проверяются `iss`, `aud`, `exp`, `nonce`.
+Первый вход создаёт пользователя по подтверждённому email; у такого пользователя нет
+пароля, поэтому парольный вход для него запрещён. Новых зависимостей нет — HTTP-клиент
+и проверка RSA на стандартной библиотеке.
+
 ## Что внутри
 
 | Раздел | Ссылка |
@@ -248,7 +277,7 @@ PYTHONPATH=backend .venv/bin/python scripts/export_openapi.py
   `prolong_wait` старше 5 дней) — модель помечает их `staleStatus`.
 - 10 аккаунтов достаточно для приёмки, но для «топ-клиентов» мало;
   `data/raw/generate.py` умеет сделать больше.
-- OIDC, Grafana и график исторических удалений — следующие шаги, не P0.
+- Grafana и график исторических удалений — следующие шаги, не P0.
 
 ---
 

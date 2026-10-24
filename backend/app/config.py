@@ -33,6 +33,17 @@ class Config:
     session_hours: int
     cookie_secure: bool
     seed_on_start: bool
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    oidc_scopes: str = "openid email profile"
+    oidc_internal_base: str = ""
+    oidc_provider_name: str = "SSO"
+
+    @property
+    def oidc_enabled(self) -> bool:
+        return bool(self.oidc_issuer.strip() and self.oidc_client_id.strip())
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -56,4 +67,11 @@ class Config:
             session_hours=int(os.getenv("SESSION_HOURS", "12")),
             cookie_secure=_env_bool("COOKIE_SECURE", False),
             seed_on_start=_env_bool("SEED_ON_START", True),
+            oidc_issuer=os.getenv("OIDC_ISSUER", "").strip(),
+            oidc_client_id=os.getenv("OIDC_CLIENT_ID", "").strip(),
+            oidc_client_secret=os.getenv("OIDC_CLIENT_SECRET", "").strip(),
+            oidc_redirect_uri=os.getenv("OIDC_REDIRECT_URI", "").strip(),
+            oidc_scopes=os.getenv("OIDC_SCOPES", "openid email profile").strip() or "openid email profile",
+            oidc_internal_base=os.getenv("OIDC_INTERNAL_BASE", "").strip(),
+            oidc_provider_name=os.getenv("OIDC_PROVIDER_NAME", "SSO").strip() or "SSO",
         )

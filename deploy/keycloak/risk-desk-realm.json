@@ -1,0 +1,49 @@
+{
+  "realm": "risk-desk",
+  "displayName": "Risk Desk",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 300,
+  "clients": [
+    {
+      "clientId": "risk-desk",
+      "name": "Risk Desk",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-secret-risk-desk",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8000/api/v1/auth/oidc/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8000/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "marketer",
+      "enabled": true,
+      "email": "marketer@example.test",
+      "emailVerified": true,
+      "firstName": "Маркетолог",
+      "lastName": "Демо",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "marketer123",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

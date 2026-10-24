@@ -11,7 +11,7 @@
 - Один Dockerfile собирает фронтенд и раздаёт его через FastAPI на8000.
 - `main.py`: приложение, startup, статика, безопасные422 и OpenAPI.
 - `config.py`: Config из окружения; `db.py`: схема/connect/транзакции.
-- `schemas.py`: входные/выходные DTO; `security.py`: пароли/серверные сессии.
+- `schemas.py`: входные/выходные DTO; `security.py`: пароли/серверные сессии; `oidc.py`: OIDC-клиент.
 - `seed.py`: import/export снимка, settings, подготовка upgrade.
 - `scoring.py`: существующие формулы, defaults, metadata и FEATURE_GENERATIONS.
 - `store.py`: recompute, сохранение/чтение score_runs/customer_scores.
@@ -65,6 +65,19 @@ Logout без require_user отзывает только выбранный то
 повторный/анонимный выход200. Клиент очищает токен/user после успешного ответа,
 при отказе сохраняет экран и предлагает повтор. Независимые сессии не затрагиваются.
 Метрики /metrics и /api/v1/metrics сохраняют прежнюю публичность.
+
+## OIDC
+
+OIDC включается переменными `OIDC_ISSUER` и `OIDC_CLIENT_ID`; без них маршруты
+`/auth/oidc/start` и `/callback` отвечают404, а экран входа показывает только пароль.
+Поток — Authorization Code + PKCE(S256): `state`, `nonce` и `code_verifier` лежат
+в `oidc_flows`, запись одноразовая и живёт10минут. ID token проверяется по JWKS(RS256):
+подпись, `iss`, `aud`/`azp`, `exp`/`iat`/`nbf` с допуском30с, `nonce`, `sub`, email.
+Первый вход создаёт пользователя по email с пустым `password_hash`; такой пользователь
+не может войти по паролю, а прежние парольные аккаунты не меняются. Любая ошибка
+возвращает303 на `/#/login?sso_error=<код>` без сессии. `OIDC_INTERNAL_BASE` задаёт
+внутренний адрес issuer для запросов из контейнера, пока браузер видит публичный.
+Кэш discovery/JWKS —5минут, новых зависимостей нет.
 
 ## Добавление признаков
 

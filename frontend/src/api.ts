@@ -17,6 +17,7 @@ export interface CustomerQuery {sort:string;order:string;level?:Level|'';q?:stri
 function params(query:CustomerQuery){const p=new URLSearchParams({sort:query.sort,order:query.order,page:String(query.page),pageSize:String(query.pageSize),urgency:query.urgency??'all'});if(query.level)p.set('level',query.level);if(query.q?.trim())p.set('q',query.q.trim());return p;}
 export const api={
  me:()=>request<User>('/api/v1/auth/me'),
+ oidcConfig:()=>request<{enabled:boolean;providerName:string}>('/api/v1/auth/oidc/config'),
  login:async(email:string,password:string)=>{const u=await request<User&{token:string}>('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email,password})});changeSession();if(u.token)localStorage.setItem('auth_token',u.token);return u;},
  logout:async()=>{const result=await request<{ok:boolean}>('/api/v1/auth/logout',{method:'POST'});localStorage.removeItem('auth_token');changeSession();return result;},
  customers:(q:CustomerQuery)=>request<CustomerPage>('/api/v1/customers?'+params(q)),

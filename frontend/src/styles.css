@@ -19,3 +19,8 @@
 dialog .field{margin-bottom:14px}
 dialog textarea{width:100%;border:1px solid #767676;border-radius:8px;padding:10px 12px;font:inherit;font-size:.8125rem;line-height:1.55;resize:vertical;color:#000;background:#fff}
 .email-dialog textarea:focus-visible,input:focus-visible{outline:2px solid #182d48;outline-offset:2px}
+
+/* Вход через SSO */
+.login__divider{display:flex;align-items:center;gap:12px;margin:2px 0;font-family:Inter,system-ui,sans-serif;font-size:.75rem;color:var(--muted)}
+.login__divider:before,.login__divider:after{content:'';flex:1;border-top:1px solid var(--line)}
+.login__divider span{white-space:nowrap}
